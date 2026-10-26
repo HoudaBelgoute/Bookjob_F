@@ -1,0 +1,46 @@
+@import './styles/tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-surface font-sans text-ink antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply text-[12px] font-semibold uppercase tracking-[0.14em] text-primary;
+  }
+  .page-title {
+    @apply text-[32px] font-normal leading-tight tracking-tight text-ink md:text-[38px];
+  }
+  .card {
+    @apply rounded-2xl border border-line bg-white shadow-card;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-primary-hover disabled:opacity-50;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:bg-surface;
+  }
+  .btn-soft {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary-soft px-4 py-2.5 text-[14px] font-semibold text-primary transition-colors hover:bg-[#dbe8f8];
+  }
+  .tag {
+    @apply rounded-lg bg-chip px-3 py-1 text-[12px] font-medium text-muted;
+  }
+  .demo-pill {
+    @apply inline-flex items-center rounded-md bg-gold-soft px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-gold-ink;
+  }
+}

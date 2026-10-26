@@ -1,0 +1,1 @@
+{ "note": "Le front dépend de l'API FastAPI (dossier backend). Déployez le backend + le build ensemble (voir README)." }

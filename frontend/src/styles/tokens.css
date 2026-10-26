@@ -1,0 +1,22 @@
+:root {
+  --navy-900: #0f2444;
+  --navy-800: #13305a;
+  --navy-700: #1a3d70;
+  --navy-600: #24507f;
+  --primary: #1d5aa6;
+  --primary-hover: #17487f;
+  --primary-soft: #e8f0fb;
+  --gold: #c8a652;
+  --gold-soft: #fbf3dc;
+  --gold-ink: #7a5a12;
+  --success: #1f8a5b;
+  --success-soft: #e3f5ee;
+  --violet-soft: #efeafb;
+  --violet-ink: #5a43a8;
+  --ink: #0f2444;
+  --muted: #5b6b82;
+  --faint: #8a97aa;
+  --line: #e4e9f1;
+  --surface: #f6f8fb;
+  --chip: #eef1f6;
+}
