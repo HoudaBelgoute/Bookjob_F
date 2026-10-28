@@ -15,12 +15,14 @@ def connection():
     if _pool is None:
         with _lock:
             if _pool is None:
-                _pool = ConnectionPool(
+                pool = ConnectionPool(
                     os.environ["DATABASE_URL"],
                     min_size=1,
                     max_size=int(os.getenv("DB_POOL_MAX", "4")),
                     kwargs={"row_factory": dict_row, "prepare_threshold": None},
                     check=ConnectionPool.check_connection,
-                    open=True,
+                    open=False,
                 )
+                pool.open()
+                _pool = pool
     return _pool.connection()

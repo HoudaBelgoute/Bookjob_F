@@ -25,7 +25,11 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-import accounts, ai, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_sync, gmail, google_login, matching, store as S
+import sys
+
+# Fonctionne quel que soit le mode de chargement (uvicorn app.main:app, Vercel "app/main.py", etc.)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app import accounts, ai, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_sync, gmail, google_login, matching, store as S
 
 app = FastAPI(title="BookJob API", version="1.0")
 
@@ -1798,7 +1802,7 @@ def _sheet_or_empty(sheet: str) -> pd.DataFrame:
 @app.get("/api/data-quality")
 def data_quality():
     """Qualité du jeu de données : rapport de nettoyage, complétude réelle, exclusions et exécutions du pipeline."""
-    from .pipeline.run import load_runs
+    from app.pipeline.run import load_runs
 
     companies = co.companies_df()
     total = int(len(companies))

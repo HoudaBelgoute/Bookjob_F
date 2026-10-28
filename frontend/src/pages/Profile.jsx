@@ -51,7 +51,7 @@ function CvSection() {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (!/\.(pdf|doc|docx)$/i.test(file.name)) return notify('Format non pris en charge : PDF ou Word')
+    if (!/\.pdf$/i.test(file.name)) return notify('Format non pris en charge : PDF uniquement')
     if (file.size > 5 * 1024 * 1024) return notify('Fichier trop volumineux (5 Mo maximum)')
     setBusy(true)
     await uploadCv(file)
@@ -65,7 +65,7 @@ function CvSection() {
           <h2 className="text-[22px] font-normal">Mon CV prêt à postuler</h2>
           <p className="mt-1 text-[13px] text-muted">Importez votre CV une fois : il sera disponible lors de l’enregistrement de vos candidatures.</p>
         </div>
-        <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" className="sr-only" onChange={onFile} />
+        <input ref={fileRef} type="file" accept=".pdf" className="sr-only" onChange={onFile} />
         <button type="button" className="btn-primary !py-2.5" disabled={busy} onClick={() => fileRef.current?.click()}>
           <Upload size={16} /> {busy ? 'Importation…' : 'Importer un CV'}
         </button>

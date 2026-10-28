@@ -8,7 +8,8 @@ from email.utils import parseaddr
 
 import pandas as pd
 
-from . import accounts, config as C, gmail, store as S
+from . import accounts, gmail, store as S
+from . import config as C
 
 _SYNC_LOCK = threading.Lock()
 _STOP_WORDS = {

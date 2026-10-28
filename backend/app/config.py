@@ -1,5 +1,4 @@
 """Configuration : chemins et variables d'environnement."""
-from email.mime import base
 import os
 from contextvars import ContextVar
 from pathlib import Path
@@ -33,7 +32,6 @@ ALLOWED_CV_EXT = {"pdf"}
 BOOKJOB_ENV = os.getenv("BOOKJOB_ENV", "development").lower()
 SESSION_COOKIE_NAME = "bookjob_session"
 SESSION_MAX_AGE = 8 * 60 * 60
-AUTH_DB = Path(os.getenv("BOOKJOB_AUTH_DB", DATA_DIR / "auth.sqlite3"))
 REGISTRATION_KEY = os.getenv("BOOKJOB_REGISTRATION_KEY", "")
 _CURRENT_USER_ID: ContextVar[str | None] = ContextVar("bookjob_user_id", default=None)
 

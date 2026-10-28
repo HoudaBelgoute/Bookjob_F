@@ -24,7 +24,10 @@ GRAPH_CONFIG = {"displayModeBar": False, "responsive": True}
 
 
 def _application_data(load_tracking) -> pd.DataFrame:
-    data = load_tracking().copy()
+    try:
+        data = load_tracking().copy()
+    except Exception:  # base injoignable : ne pas faire planter le démarrage
+        data = pd.DataFrame()
     if "Statut" not in data:
         data["Statut"] = pd.Series(dtype="object")
     data["Statut"] = data["Statut"].fillna("").replace("", "À contacter")
