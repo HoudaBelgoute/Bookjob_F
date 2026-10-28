@@ -51,7 +51,7 @@ _schema_ready = False
 def _connect():
     # prepare_threshold=None : obligatoire avec le Transaction pooler (pgbouncer)
     return psycopg.connect(
-        os.environ["DATABASE_URL"], row_factory=dict_row, prepare_threshold=None
+        os.environ["postgresql://postgres.yjxeafsnoitartvpcrnz:FNA11DzMYnXCqM1A@aws-1-eu-west-3.pooler.supabase.com:6543/postgres?pgbouncer=true"], row_factory=dict_row, prepare_threshold=None
     )
 
 
