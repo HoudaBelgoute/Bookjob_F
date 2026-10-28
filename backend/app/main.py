@@ -25,8 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import accounts, ai, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_sync, gmail, google_login, matching, store as S
-
+import accounts, ai, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_sync, gmail, google_login, matching, store as S
 app = FastAPI(title="BookJob API", version="1.0")
 
 _LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}
@@ -83,6 +82,7 @@ class RequireLoginMiddleware:
             "/api/auth/status", "/api/auth/login", "/api/auth/register", "/api/auth/logout",
             "/api/email/confirm", "/api/email/confirm/details", "/api/health",
             "/api/auth/google", "/api/google/callback",
+            "/api/cron/email-sync",
         }
         protected_api = path.startswith("/api/") and path not in public_api and request.method != "OPTIONS"
         protected_dash = path == "/dash" or path.startswith("/dash/")
