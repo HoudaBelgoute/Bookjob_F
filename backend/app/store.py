@@ -1,15 +1,22 @@
-"""Persistance fichiers : suivi.csv, profil.json, state.json (favoris, alertes, réglages, conversations, CV)."""
-import json
+"""Persistance Postgres (Supabase) : suivi, profil, state (favoris, alertes, réglages, conversations, CV).
+
+Les fonctions publiques gardent les mêmes noms/signatures que l'ancienne version fichiers.
+Variable d'environnement requise : DATABASE_URL (Supabase, Transaction pooler, port 6543).
+"""
+import os
 import re
 import threading
 import uuid
 from datetime import date, timedelta
 
 import pandas as pd
+import psycopg
+from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from . import config as C
 
-LOCK = threading.RLock()
+LOCK = threading.RLock()  # conservé : d'autres modules peuvent l'importer
 
 DEFAULT_STATE = {
     "favorites": [],
@@ -19,6 +26,68 @@ DEFAULT_STATE = {
     "cvs": [],          # [{id, name, file, size, uploaded, main}]
     "home": None,       # {lat, lon, label}
 }
+
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS user_state (
+    user_id    TEXT PRIMARY KEY,
+    data       JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS user_profile (
+    user_id    TEXT PRIMARY KEY,
+    data       JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS user_tracking (
+    user_id    TEXT PRIMARY KEY,
+    rows       JSONB NOT NULL DEFAULT '[]'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+"""
+
+_schema_ready = False
+
+
+def _connect():
+    # prepare_threshold=None : obligatoire avec le Transaction pooler (pgbouncer)
+    return psycopg.connect(
+        os.environ["DATABASE_URL"], row_factory=dict_row, prepare_threshold=None
+    )
+
+
+def _ensure_schema(conn) -> None:
+    global _schema_ready
+    if _schema_ready:
+        return
+    conn.execute(SCHEMA_SQL)
+    conn.commit()
+    _schema_ready = True
+
+
+def _uid() -> str:
+    return str(C.current_user_id() or "default")
+
+
+def _read(table: str, column: str):
+    with _connect() as conn:
+        _ensure_schema(conn)
+        row = conn.execute(
+            f"SELECT {column} FROM {table} WHERE user_id = %s", (_uid(),)
+        ).fetchone()
+    return row[column] if row else None
+
+
+def _write(table: str, column: str, value) -> None:
+    with _connect() as conn:
+        _ensure_schema(conn)
+        conn.execute(
+            f"""INSERT INTO {table} (user_id, {column}, updated_at)
+                VALUES (%s, %s, now())
+                ON CONFLICT (user_id)
+                DO UPDATE SET {column} = EXCLUDED.{column}, updated_at = now()""",
+            (_uid(), Jsonb(value)),
+        )
+        conn.commit()
 
 
 def new_id(prefix: str) -> str:
@@ -31,48 +100,31 @@ def sanitize(txt) -> str:
 
 # ---------- state ----------
 def load_state() -> dict:
-    path = C.user_path(C.STATE)
-    with LOCK:
-        if path.exists():
-            try:
-                s = json.loads(path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
-                s = {}
-        else:
-            s = {}
-    out = json.loads(json.dumps(DEFAULT_STATE))
+    s = _read("user_state", "data") or {}
+    out = json_copy(DEFAULT_STATE)
     out.update(s)
     out["settings"] = {**DEFAULT_STATE["settings"], **s.get("settings", {})}
     return out
 
 
 def save_state(s: dict) -> None:
-    path = C.user_path(C.STATE)
-    with LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
-        tmp.replace(path)
+    _write("user_state", "data", s)
+
+
+def json_copy(obj):
+    import json
+    return json.loads(json.dumps(obj))
 
 
 # ---------- profil ----------
 def load_profile() -> dict:
-    p = {}
-    path = C.user_path(C.PROFIL)
-    if path.exists():
-        try:
-            p = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            p = {}
+    p = _read("user_profile", "data") or {}
     return {k: str(p.get(k, "") or "") for k in C.PROFILE_FIELDS}
 
 
 def save_profile(p: dict) -> dict:
     clean = {k: str(p.get(k, "") or "").strip() for k in C.PROFILE_FIELDS}
-    path = C.user_path(C.PROFIL)
-    with LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(clean, ensure_ascii=False, indent=1), encoding="utf-8")
+    _write("user_profile", "data", clean)
     return clean
 
 
@@ -103,34 +155,31 @@ def profile_completion(p: dict) -> dict:
 
 
 # ---------- suivi ----------
-def load_tracking() -> pd.DataFrame:
-    path = C.user_path(C.SUIVI)
-    workbook = C.user_path(C.XLSX) if C.current_user_id() else C.XLSX
-    def normalize(data: pd.DataFrame) -> pd.DataFrame:
-        data = data.reindex(columns=C.COLS, fill_value="")
-        data["Statut"] = data["Statut"].replace(C.LEGACY_STATUTS)
-        return data
+def _normalize(data: pd.DataFrame) -> pd.DataFrame:
+    data = data.reindex(columns=C.COLS, fill_value="")
+    data["Statut"] = data["Statut"].replace(C.LEGACY_STATUTS)
+    return data
 
-    with LOCK:
-        if path.exists():
-            d = pd.read_csv(path, dtype=str).fillna("")
-            return normalize(d)
-        try:
-            d = pd.read_excel(workbook, sheet_name="Suivi").fillna("").astype(str)
-            d["Lien_offre"] = ""
-            d["Fichier_CV"] = ""
-            return normalize(d)
-        except Exception:
-            return pd.DataFrame(columns=C.COLS)
+
+def load_tracking() -> pd.DataFrame:
+    rows = _read("user_tracking", "rows")
+    if rows is not None:
+        return _normalize(pd.DataFrame(rows, columns=C.COLS).fillna("").astype(str))
+    # Premier chargement : on part du classeur Excel (lecture seule, présent dans le dépôt)
+    workbook = C.user_path(C.XLSX) if C.current_user_id() else C.XLSX
+    try:
+        d = pd.read_excel(workbook, sheet_name="Suivi").fillna("").astype(str)
+        d["Lien_offre"] = ""
+        d["Fichier_CV"] = ""
+        return _normalize(d)
+    except Exception:
+        return pd.DataFrame(columns=C.COLS)
 
 
 def save_tracking(d: pd.DataFrame) -> None:
-    path = C.user_path(C.SUIVI)
-    with LOCK:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        saved = d.reindex(columns=C.COLS, fill_value="").copy()
-        saved["Statut"] = saved["Statut"].replace(C.LEGACY_STATUTS)
-        saved.to_csv(path, index=False)
+    saved = d.reindex(columns=C.COLS, fill_value="").copy()
+    saved["Statut"] = saved["Statut"].replace(C.LEGACY_STATUTS)
+    _write("user_tracking", "rows", saved.fillna("").astype(str).to_dict(orient="records"))
 
 
 def default_relance(date_candidature: str, days: int = 7) -> str:

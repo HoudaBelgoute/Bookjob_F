@@ -1,4 +1,5 @@
 """Configuration : chemins et variables d'environnement."""
+from email.mime import base
 import os
 from contextvars import ContextVar
 from pathlib import Path
@@ -17,11 +18,16 @@ PROFIL = DATA_DIR / "profil.json"
 STATE = DATA_DIR / "state.json"
 GEOCACHE = DATA_DIR / "geocode_cache.json"
 
+
+
 for d in (DATA_DIR, CV_SENT_DIR, CV_LIB_DIR):
-    d.mkdir(parents=True, exist_ok=True)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:  # Vercel : disque en lecture seule
+        pass
 
 MAX_UPLOAD = 5 * 1024 * 1024
-ALLOWED_CV_EXT = {"pdf", "doc", "docx"}
+ALLOWED_CV_EXT = {"pdf"}
 
 # Account authentication and private per-user storage.
 BOOKJOB_ENV = os.getenv("BOOKJOB_ENV", "development").lower()
@@ -48,7 +54,8 @@ def user_data_dir(user_id: str | None = None) -> Path | None:
     user_id = user_id or current_user_id()
     if not user_id:
         return None
-    return DATA_DIR / "users" / user_id
+    base = Path("/tmp/bookjob") if os.getenv("VERCEL") else DATA_DIR
+    return base / "users" / user_id
 
 
 def user_path(path: Path) -> Path:

@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 import mimetypes
+import os
 import re
 import secrets
 import threading
@@ -1946,6 +1947,8 @@ async def _email_sync_worker():
 @app.on_event("startup")
 async def start_email_sync_worker():
     global _EMAIL_SYNC_TASK
+    if os.getenv("VERCEL"):
+        return
     accounts.initialize()
     if _EMAIL_SYNC_TASK is None or _EMAIL_SYNC_TASK.done():
         _EMAIL_SYNC_TASK = asyncio.create_task(_email_sync_worker())
@@ -1962,6 +1965,27 @@ async def stop_email_sync_worker():
             pass
         _EMAIL_SYNC_TASK = None
 
+
+@app.get("/api/cron/email-sync")
+def cron_email_sync(request: Request):
+    secret = os.getenv("CRON_SECRET", "")
+    auth = request.headers.get("authorization", "")
+    if not secret or not hmac.compare_digest(auth, f"Bearer {secret}"):
+        raise HTTPException(401, "Non autorisé")
+    done = 0
+    for user_id in accounts.list_user_ids():
+        token = C.set_current_user(user_id)
+        try:
+            status = gmail.status()
+            if not status.get("connected") or not status.get("read_authorized"):
+                continue
+            email_sync.sync_user(user_id)
+            done += 1
+        except (gmail.GmailError, RuntimeError):
+            _LOGGER.warning("Gmail sync failed for account %s", user_id, exc_info=True)
+        finally:
+            C.reset_current_user(token)
+    return {"ok": True, "synced": done}
 
 @app.post("/api/reset/tracking")
 def reset_tracking():

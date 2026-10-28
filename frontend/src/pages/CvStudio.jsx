@@ -45,7 +45,7 @@ export default function CvStudio() {
     const f = e.target.files?.[0]
     e.target.value = ''
     if (!f) return
-    if (!/\.(pdf|doc|docx)$/i.test(f.name)) return notify('Format non pris en charge : PDF ou Word')
+    if (!/\.pdf$/i.test(f.name)) return notify('Format non pris en charge : PDF uniquement')
     if (f.size > 5 * 1024 * 1024) return notify('Fichier trop volumineux (5 Mo maximum)')
     uploadCv(f)
   }
@@ -64,8 +64,8 @@ export default function CvStudio() {
 
       {tab === 'mine' && (
         <section className="mt-6">
-          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" className="sr-only" onChange={onFile} />
-          <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={17} /> Importer un CV (PDF ou Word)</button>
+          <input ref={fileRef} type="file" accept=".pdf" className="sr-only" onChange={onFile} />
+          <button className="btn-primary" onClick={() => fileRef.current?.click()}><Upload size={17} /> Importer un CV (PDF uniquement)</button>
           {cvs.length === 0 ? (
             <div className="card mt-5 p-10 text-center text-muted">Aucun CV importé. Importez-en un pour pouvoir le joindre à vos candidatures.</div>
           ) : (

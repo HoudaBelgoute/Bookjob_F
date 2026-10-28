@@ -84,7 +84,7 @@ export default function ApplyModal({ company, onClose, onDone }) {
     setErr('')
     if (!ent.trim()) return setErr('Indiquez le nom de l’entreprise.')
     if (!file && !cvId) return setErr('Importez votre CV ou choisissez-en un dans votre bibliothèque.')
-    if (file && !/\.(pdf|doc|docx)$/i.test(file.name)) return setErr('Format non pris en charge : PDF ou Word.')
+    if (file && !/\.pdf$/i.test(file.name)) return setErr('Format non pris en charge : PDF uniquement.')
     if (file && file.size > 5 * 1024 * 1024) return setErr('Fichier trop volumineux (5 Mo maximum).')
     const f = new FormData()
     f.append('entreprise', ent)
@@ -194,12 +194,12 @@ export default function ApplyModal({ company, onClose, onDone }) {
               </label>
               <div className="text-[13px] font-semibold">
                 Fichier de lettre finalisé (facultatif, à joindre manuellement dans Gmail)
-                <input ref={letterRef} type="file" accept=".pdf,.doc,.docx" className="sr-only" onChange={(e) => setCoverLetterFile(e.target.files?.[0] || null)} />
+                <input ref={letterRef} type="file" accept=".pdf" className="sr-only" onChange={(e) => setCoverLetterFile(e.target.files?.[0] || null)} />
                 <div className="mt-2 flex items-center gap-3">
                   <button type="button" className="btn-outline !py-2" onClick={() => letterRef.current?.click()}>
                     {coverLetterFile ? 'Changer le fichier' : 'Importer la lettre'}
                   </button>
-                  <span className="truncate text-[12px] font-normal text-muted">{coverLetterFile ? coverLetterFile.name : 'PDF ou Word, 5 Mo max'}</span>
+                  <span className="truncate text-[12px] font-normal text-muted">{coverLetterFile ? coverLetterFile.name : 'PDF uniquement, 5 Mo max'}</span>
                   {coverLetterFile && <button type="button" className="text-[12px] underline" onClick={() => setCoverLetterFile(null)}>Retirer</button>}
                 </div>
               </div>
