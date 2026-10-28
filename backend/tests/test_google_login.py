@@ -8,7 +8,6 @@ from app import accounts, config as C, main
 
 @pytest.fixture
 def google(monkeypatch, tmp_path):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
     monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     monkeypatch.setattr(C, "BOOKJOB_ENV", "development")

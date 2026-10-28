@@ -34,7 +34,6 @@ def _component_content(component, component_id):
 
 
 def _authenticated_client(monkeypatch, tmp_path):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
@@ -82,7 +81,6 @@ def test_dash_dashboard_is_mounted_and_serves_interactive_layout(monkeypatch, tm
 
 
 def test_dash_dashboard_requires_bookjob_login(monkeypatch, tmp_path):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     accounts.initialize()
     client = TestClient(app, follow_redirects=False)
 

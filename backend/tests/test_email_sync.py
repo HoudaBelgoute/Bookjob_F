@@ -20,7 +20,6 @@ def _application(tracking_id="EXT-TEST", status="Candidature envoyée", date_sen
 
 
 def _setup_sync(monkeypatch, tmp_path, tracking):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()

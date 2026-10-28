@@ -8,7 +8,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent
 tmp = Path(tempfile.mkdtemp())
-shutil.copytree(SRC / "data", tmp / "data", ignore=shutil.ignore_patterns("auth.sqlite3*", "users"))
+shutil.copytree(SRC / "data", tmp / "data", ignore=shutil.ignore_patterns("users"))
 os.environ["BOOKJOB_DATA"] = str(tmp / "data")
 os.environ["BOOKJOB_FRONT_DIST"] = str(tmp / "nodist")
 os.environ["BOOKJOB_REGISTRATION_KEY"] = ""
@@ -27,12 +27,16 @@ C.SUIVI = C.DATA_DIR / "suivi.csv"
 C.PROFIL = C.DATA_DIR / "profil.json"
 C.STATE = C.DATA_DIR / "state.json"
 C.GEOCACHE = C.DATA_DIR / "geocode_cache.json"
-C.AUTH_DB = C.DATA_DIR / "auth.sqlite3"
 C.EMAIL_CONFIRMATIONS_FILE = C.DATA_DIR / "email_confirmations.json"
 C.GOOGLE_TOKEN_FILE = tmp / "google_oauth_token.json"
 C.FRONT_DIST = tmp / "nodist"
 C.REGISTRATION_KEY = ""
 accounts.initialize()
+
+# Remove the account left behind by a previous run so registration below returns 201.
+from supabase import create_client  # noqa: E402
+_sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+_sb.table("users").delete().eq("email", "api-test@example.com").execute()
 
 c = TestClient(app)
 registration = c.post("/api/auth/register", json={

@@ -1,6 +1,5 @@
 import json
 import re
-import sqlite3
 
 import pandas as pd
 import pytest
@@ -12,8 +11,7 @@ from app import email_confirmations
 from app import main
 
 
-def test_login_protects_api_and_sets_session_cookie(monkeypatch, tmp_path):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
+def test_login_protects_api_and_sets_session_cookie(monkeypatch, tmp_path, supabase_client):
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
     monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
@@ -32,12 +30,14 @@ def test_login_protects_api_and_sets_session_cookie(monkeypatch, tmp_path):
     assert response.status_code == 201
     assert response.headers["set-cookie"].startswith("bookjob_session=")
     assert response.json()["user"]["full_name"] == "Candidate Example"
-    with sqlite3.connect(C.AUTH_DB) as connection:
-        saved_user = connection.execute(
-            "SELECT email, full_name FROM users WHERE email = ?",
-            ("candidate@example.com",),
-        ).fetchone()
-    assert saved_user == ("candidate@example.com", "Candidate Example")
+    saved_user = (
+        supabase_client.table("users")
+        .select("email, full_name")
+        .eq("email", "candidate@example.com")
+        .execute()
+        .data
+    )
+    assert saved_user == [{"email": "candidate@example.com", "full_name": "Candidate Example"}]
     assert client.get("/api/profile").json()["profile"]["nom"] == "Candidate Example"
     assert client.get("/api/meta").status_code == 200
     application = client.post("/api/tracking", json={
@@ -58,7 +58,6 @@ def test_login_protects_api_and_sets_session_cookie(monkeypatch, tmp_path):
 
 
 def test_tracking_and_email_history_are_isolated_between_accounts(monkeypatch, tmp_path):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
@@ -86,7 +85,6 @@ def test_tracking_and_email_history_are_isolated_between_accounts(monkeypatch, t
 
 
 def test_two_account_spaces_isolate_favorites_applications_and_cvs(monkeypatch, tmp_path):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(C, "CV_LIB_DIR", C.DATA_DIR / "uploads" / "cv_bibliotheque")
     monkeypatch.setattr(C, "CV_SENT_DIR", C.DATA_DIR / "uploads" / "cv_envoyes")
@@ -149,7 +147,6 @@ def test_two_account_spaces_isolate_favorites_applications_and_cvs(monkeypatch, 
 
 
 def test_legacy_gmail_connection_migrates_only_to_first_account(monkeypatch, tmp_path):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(C, "GOOGLE_TOKEN_FILE", tmp_path / "legacy" / "google_oauth_token.json")
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_ID", "client-id")
@@ -188,7 +185,6 @@ def test_legacy_gmail_connection_migrates_only_to_first_account(monkeypatch, tmp
 
 
 def test_logout_revokes_session_and_preserves_google_connection(monkeypatch, tmp_path):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
     monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
@@ -240,7 +236,6 @@ def _configure_application(monkeypatch, tmp_path, *, send=None):
         state["saved"].append(copy)
         state["tracking"] = copy
 
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
     monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
@@ -469,7 +464,6 @@ def test_preview_delivery_failure_leaves_application_unsent(monkeypatch, tmp_pat
 
 
 def test_google_oauth_callback_requires_matching_state(monkeypatch, tmp_path):
-    monkeypatch.setattr(C, "AUTH_DB", tmp_path / "auth.sqlite3")
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
     monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
