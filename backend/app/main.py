@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import accounts, ai, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_sync, gmail, google_login, matching, store as S
+
 app = FastAPI(title="BookJob API", version="1.0")
 
 _LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}
