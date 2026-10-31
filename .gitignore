@@ -22,3 +22,15 @@ frontend/dist/
 __pycache__/
 .pytest_cache/
 *.py[cod]
+.env
+.venv/
+node_modules/
+dist/
+__pycache__/
+*.db
+.env
+.venv/
+node_modules/
+dist/
+__pycache__/
+*.db

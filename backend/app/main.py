@@ -16,7 +16,7 @@ from http.cookies import CookieError, SimpleCookie
 from pathlib import Path
 from typing import Optional
 from html import escape
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import pandas as pd
 from a2wsgi import WSGIMiddleware
@@ -429,11 +429,31 @@ def _save_upload(f: UploadFile, folder: Path, base: str) -> tuple[str, int]:
     return name, len(data)
 
 
-def _safe(folder: Path, name: str) -> Path:
-    p = (folder / name).resolve()
-    if folder.resolve() not in p.parents or not p.exists():
+def _safe(folder, name: str):
+    name = str(name or "")
+    if not name or name in {".", ".."} or "/" in name or "\\" in name or "\0" in name:
+        raise HTTPException(404, "Fichier introuvable")
+    p = folder / name
+    if not p.is_file():
         raise HTTPException(404, "Fichier introuvable")
     return p
+
+
+def _file_response(p, filename: str | None = None, media_type: str | None = None, headers: dict | None = None):
+    """Renvoie un fichier stocké (Supabase ou disque) en pièce jointe."""
+    filename = filename or p.name
+    media_type = media_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    all_headers = {"X-Content-Type-Options": "nosniff", **(headers or {})}
+    if "Content-Disposition" not in all_headers:
+        ascii_name = filename.encode("ascii", "ignore").decode() or "fichier"
+        all_headers["Content-Disposition"] = (
+            f'attachment; filename="{ascii_name.replace(chr(34), "")}"; filename*=utf-8\'\'{quote(filename)}'
+        )
+    try:
+        data = p.read_bytes()
+    except FileNotFoundError as ex:
+        raise HTTPException(404, "Fichier introuvable") from ex
+    return Response(data, media_type=media_type, headers=all_headers)
 
 
 def _add_cv_to_library(source: Path, original_filename: str) -> None:
@@ -1305,7 +1325,7 @@ def download_tracking_cv(tid: str):
     if m.empty or not m.iloc[0]["Fichier_CV"]:
         raise HTTPException(404, "Aucun CV pour cette candidature")
     p = _safe(C.user_path(C.CV_SENT_DIR), m.iloc[0]["Fichier_CV"])
-    return FileResponse(p, filename=p.name)
+    return _file_response(p)
 
 
 @app.get("/api/export/suivi.csv")
@@ -1381,8 +1401,8 @@ def get_avatar():
     path = _avatar_file()
     if not path:
         raise HTTPException(404, "Aucune photo de profil")
-    return FileResponse(path, media_type=AVATAR_MEDIA_TYPES[path.suffix.lstrip(".")],
-                        headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
+    return _file_response(path, media_type=AVATAR_MEDIA_TYPES[path.suffix.lstrip(".")],
+                          headers={"Cache-Control": "private, max-age=3600", "Content-Disposition": "inline"})
 
 
 @app.post("/api/profile/avatar")
@@ -1462,7 +1482,7 @@ def cv_file(cid: str):
     if not cv:
         raise HTTPException(404, "CV introuvable")
     p = _safe(C.user_path(C.CV_LIB_DIR), cv["file"])
-    return FileResponse(p, filename=f"{cv['name']}.{p.suffix.lstrip('.')}")
+    return _file_response(p, filename=f"{cv['name']}.{p.suffix.lstrip('.')}")
 
 
 # ---------- génération CV / e-mail / lettre ----------

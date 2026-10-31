@@ -6,6 +6,11 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 
+import pytest
+
+if not os.environ.get("TEST_DATABASE_URL"):
+    pytest.skip("Definir TEST_DATABASE_URL pour lancer les tests de base de donnees", allow_module_level=True)
+
 SRC = Path(__file__).resolve().parent.parent
 tmp = Path(tempfile.mkdtemp())
 shutil.copytree(SRC / "data", tmp / "data", ignore=shutil.ignore_patterns("users"))
@@ -33,10 +38,10 @@ C.FRONT_DIST = tmp / "nodist"
 C.REGISTRATION_KEY = ""
 accounts.initialize()
 
-# Remove the account left behind by a previous run so registration below returns 201.
-from supabase import create_client  # noqa: E402
-_sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
-_sb.table("users").delete().eq("email", "api-test@example.com").execute()
+# Supprime le compte laisse par un lancement precedent pour que l'inscription renvoie 201.
+import psycopg  # noqa: E402
+with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as _conn:
+    _conn.execute("DELETE FROM users WHERE email = %s", ("api-test@example.com",))
 
 c = TestClient(app)
 registration = c.post("/api/auth/register", json={
@@ -266,8 +271,9 @@ def test_apply_reports_a_missing_library_file_clearly():
     cv = client.post("/api/cvs", files={"file": ("a.pdf", b"%PDF-1.4 a", "application/pdf")}).json()["items"][0]
     unknown = client.post("/api/tracking/apply", data={"entreprise": "X", "cv_id": "cv-inexistant"})
     assert unknown.status_code == 404 and "CV introuvable" in unknown.json()["detail"]
-    for stored in C.DATA_DIR.glob(f"users/*/uploads/cv_bibliotheque/{cv['file']}"):
-        stored.unlink()  # fichier perdu sur le disque alors que l'entrée existe encore
+    with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as conn:
+        # fichier perdu dans le stockage alors que l'entrée existe encore
+        conn.execute("DELETE FROM user_files WHERE path = %s", (f"uploads/cv_bibliotheque/{cv['file']}",))
     lost = client.post("/api/tracking/apply", data={"entreprise": "X", "cv_id": cv["id"]})
     assert lost.status_code == 404 and "n'existe plus" in lost.json()["detail"]
 

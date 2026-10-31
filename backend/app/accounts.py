@@ -1,22 +1,16 @@
 """Comptes BookJob et sessions serveur révocables, stockés dans Postgres (Supabase).
 
-Mêmes fonctions publiques que l'ancienne version SQLite.
 Variable d'environnement requise : DATABASE_URL (Supabase, Transaction pooler, port 6543).
 """
 import hashlib
 import hmac
+import json
 import logging
-import os
 import secrets
-import shutil
 import time
 
-import json
-
 import pandas as pd
-import psycopg
 from psycopg.errors import UniqueViolation
-from psycopg.rows import dict_row
 
 from . import config as C
 from . import db
@@ -26,75 +20,13 @@ log = logging.getLogger(__name__)
 
 _PASSWORD_ROUNDS = 310_000
 
-_SCHEMA_STATEMENTS = [
-    """CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        email TEXT NOT NULL UNIQUE,
-        full_name TEXT NOT NULL DEFAULT '',
-        password_hash TEXT NOT NULL,
-        password_salt TEXT NOT NULL,
-        created_at BIGINT NOT NULL
-    )""",
-    """CREATE TABLE IF NOT EXISTS sessions (
-        token_hash TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        expires_at BIGINT NOT NULL,
-        created_at BIGINT NOT NULL
-    )""",
-    "CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id)",
-    "CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at)",
-    """CREATE TABLE IF NOT EXISTS application_events (
-        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        tracking_id TEXT NOT NULL,
-        old_status TEXT NOT NULL,
-        new_status TEXT NOT NULL,
-        source TEXT NOT NULL,
-        details TEXT NOT NULL DEFAULT '',
-        occurred_at TEXT NOT NULL
-    )""",
-    """CREATE TABLE IF NOT EXISTS email_messages (
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        message_id TEXT NOT NULL,
-        tracking_id TEXT,
-        classification TEXT NOT NULL,
-        confidence DOUBLE PRECISION NOT NULL,
-        subject TEXT NOT NULL,
-        sender TEXT NOT NULL,
-        received_at TEXT NOT NULL,
-        snippet TEXT NOT NULL,
-        review_required INTEGER NOT NULL,
-        PRIMARY KEY (user_id, message_id)
-    )""",
-    """CREATE TABLE IF NOT EXISTS email_sync_state (
-        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        last_checked TEXT,
-        status TEXT NOT NULL DEFAULT 'never',
-        error TEXT NOT NULL DEFAULT ''
-    )""",
-    """CREATE TABLE IF NOT EXISTS confirmation_owners (
-        token_hash TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        expires_at BIGINT NOT NULL
-    )""",
-    # Bloque l'accès public via l'API Supabase (le backend, rôle postgres, n'est pas concerné).
-    "ALTER TABLE users ENABLE ROW LEVEL SECURITY",
-    "ALTER TABLE sessions ENABLE ROW LEVEL SECURITY",
-    "ALTER TABLE application_events ENABLE ROW LEVEL SECURITY",
-    "ALTER TABLE email_messages ENABLE ROW LEVEL SECURITY",
-    "ALTER TABLE email_sync_state ENABLE ROW LEVEL SECURITY",
-    "ALTER TABLE confirmation_owners ENABLE ROW LEVEL SECURITY",
-]
-
-
 def _connect():
     return db.connection()
 
 
 def initialize() -> None:
-    with _connect() as connection:
-        for statement in _SCHEMA_STATEMENTS:
-            connection.execute(statement)
+    """Applique le schéma Supabase (supabase/schema.sql) ; idempotent."""
+    db.ensure_schema()
 
 
 def _public_user(row: dict) -> dict:
@@ -112,6 +44,10 @@ def _import_legacy_data(user_id: str) -> None:
         legacy_tracking = C.DATA_DIR / "suivi.csv"
         if legacy_tracking.is_file():
             store.save_tracking(pd.read_csv(legacy_tracking, dtype=str).fillna(""))
+        else:
+            seeded = store.tracking_from_workbook(C.DATA_DIR / "donnees_nettoyees.xlsx")
+            if not seeded.empty:
+                store.save_tracking(seeded)
         legacy_profile = C.DATA_DIR / "profil.json"
         if legacy_profile.is_file():
             loaded = json.loads(legacy_profile.read_text(encoding="utf-8"))
@@ -127,21 +63,19 @@ def _import_legacy_data(user_id: str) -> None:
     finally:
         C.reset_current_user(token)
 
-    # Fichiers (classeur Excel, uploads) : copie « au mieux » ; sur Vercel le disque est en lecture seule.
+    # Fichiers locaux (uploads, confirmations) : envoyés dans Supabase « au mieux ».
     try:
-        target = C.user_data_dir(user_id)
-        target.mkdir(parents=True, exist_ok=True)
-        workbook = C.DATA_DIR / "donnees_nettoyees.xlsx"
-        if workbook.is_file():
-            shutil.copy2(workbook, target / workbook.name)
+        legacy_files = []
         source_uploads = C.DATA_DIR / "uploads"
         if source_uploads.is_dir():
-            shutil.copytree(source_uploads, target / "uploads", dirs_exist_ok=True)
+            legacy_files += [p for p in source_uploads.rglob("*") if p.is_file()]
         confirmations = C.DATA_DIR / "email_confirmations.json"
         if confirmations.is_file():
-            shutil.copy2(confirmations, target / confirmations.name)
-    except OSError:
-        log.warning("Copie des fichiers locaux ignorée (disque en lecture seule ?)")
+            legacy_files.append(confirmations)
+        for path in legacy_files:
+            C.user_path(path, user_id).write_bytes(path.read_bytes())
+    except Exception:
+        log.warning("Import des fichiers locaux ignoré", exc_info=True)
 
 
 def _initialize_user_profile(user_id: str, full_name: str, email: str) -> None:

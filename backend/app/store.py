@@ -1,20 +1,17 @@
 """Persistance Postgres (Supabase) : suivi, profil, state (favoris, alertes, réglages, conversations, CV).
 
 Les fonctions publiques gardent les mêmes noms/signatures que l'ancienne version fichiers.
-Variable d'environnement requise : DATABASE_URL (Supabase, Transaction pooler, port 6543).
 """
-import os
 import re
 import threading
 import uuid
 from datetime import date, timedelta
 
 import pandas as pd
-import psycopg
-from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import config as C
+from . import db
 
 LOCK = threading.RLock()  # conservé : d'autres modules peuvent l'importer
 
@@ -27,41 +24,7 @@ DEFAULT_STATE = {
     "home": None,       # {lat, lon, label}
 }
 
-SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS user_state (
-    user_id    TEXT PRIMARY KEY,
-    data       JSONB NOT NULL DEFAULT '{}'::jsonb,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS user_profile (
-    user_id    TEXT PRIMARY KEY,
-    data       JSONB NOT NULL DEFAULT '{}'::jsonb,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS user_tracking (
-    user_id    TEXT PRIMARY KEY,
-    rows       JSONB NOT NULL DEFAULT '[]'::jsonb,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-"""
-
-_schema_ready = False
-
-
-def _connect():
-    # prepare_threshold=None : obligatoire avec le Transaction pooler (pgbouncer)
-    return psycopg.connect(
-        os.environ["DATABASE_URL"], row_factory=dict_row, prepare_threshold=None
-    )
-
-
-def _ensure_schema(conn) -> None:
-    global _schema_ready
-    if _schema_ready:
-        return
-    conn.execute(SCHEMA_SQL)
-    conn.commit()
-    _schema_ready = True
+_TABLES = {"user_state": "data", "user_profile": "data", "user_tracking": "rows"}
 
 
 def _uid() -> str:
@@ -69,8 +32,8 @@ def _uid() -> str:
 
 
 def _read(table: str, column: str):
-    with _connect() as conn:
-        _ensure_schema(conn)
+    assert _TABLES.get(table) == column
+    with db.connection() as conn:
         row = conn.execute(
             f"SELECT {column} FROM {table} WHERE user_id = %s", (_uid(),)
         ).fetchone()
@@ -78,8 +41,8 @@ def _read(table: str, column: str):
 
 
 def _write(table: str, column: str, value) -> None:
-    with _connect() as conn:
-        _ensure_schema(conn)
+    assert _TABLES.get(table) == column
+    with db.connection() as conn:
         conn.execute(
             f"""INSERT INTO {table} (user_id, {column}, updated_at)
                 VALUES (%s, %s, now())
@@ -87,7 +50,6 @@ def _write(table: str, column: str, value) -> None:
                 DO UPDATE SET {column} = EXCLUDED.{column}, updated_at = now()""",
             (_uid(), Jsonb(value)),
         )
-        conn.commit()
 
 
 def new_id(prefix: str) -> str:
@@ -165,8 +127,14 @@ def load_tracking() -> pd.DataFrame:
     rows = _read("user_tracking", "rows")
     if rows is not None:
         return _normalize(pd.DataFrame(rows, columns=C.COLS).fillna("").astype(str))
-    # Premier chargement : on part du classeur Excel (lecture seule, présent dans le dépôt)
-    workbook = C.user_path(C.XLSX) if C.current_user_id() else C.XLSX
+    if C.current_user_id():
+        # Compte sans suivi enregistré : liste vide (l'import initial se fait à la création du 1er compte).
+        return pd.DataFrame(columns=C.COLS)
+    return tracking_from_workbook(C.XLSX)
+
+
+def tracking_from_workbook(workbook) -> pd.DataFrame:
+    """Feuille « Suivi » du classeur Excel livré avec le dépôt (lecture seule)."""
     try:
         d = pd.read_excel(workbook, sheet_name="Suivi").fillna("").astype(str)
         d["Lien_offre"] = ""

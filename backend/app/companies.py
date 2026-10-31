@@ -1,6 +1,7 @@
 """Entreprises (Google Maps nettoyé), coordonnées, distance, matching profil ↔ secteur."""
 import hashlib
 import json
+import logging
 import math
 import re
 
@@ -9,6 +10,8 @@ import requests
 
 from . import config as C
 from .store import LOCK, split_list
+
+log = logging.getLogger(__name__)
 
 # Centres approximatifs des quartiers (le fichier Google Places n'a pas de latitude/longitude).
 QUARTIER_COORDS = {
@@ -59,19 +62,35 @@ def _jitter(cid: str):
     return ((h % 1000) / 1000 - 0.5) * 0.012, (((h // 1000) % 1000) / 1000 - 0.5) * 0.012
 
 
+def _geocache_blob():
+    from .blobs import GLOBAL_OWNER, BlobPath
+
+    return BlobPath(GLOBAL_OWNER, "geocode_cache.json")
+
+
 def load_geocache() -> dict:
+    """Cache de géocodage partagé : Supabase en priorité, puis le fichier livré dans le dépôt."""
     with LOCK:
+        try:
+            return json.loads(_geocache_blob().read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            pass
+        except Exception:
+            log.warning("Cache de géocodage Supabase indisponible", exc_info=True)
         if C.GEOCACHE.exists():
             try:
                 return json.loads(C.GEOCACHE.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, OSError):
                 return {}
     return {}
 
 
 def _save_geocache(c: dict) -> None:
     with LOCK:
-        C.GEOCACHE.write_text(json.dumps(c, ensure_ascii=False), encoding="utf-8")
+        try:
+            _geocache_blob().write_text(json.dumps(c, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            log.warning("Cache de géocodage non enregistré", exc_info=True)
 
 
 def companies_df(force: bool = False) -> pd.DataFrame:

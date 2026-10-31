@@ -2,7 +2,6 @@
 import base64
 import json
 import os
-import secrets
 import time
 from email.message import EmailMessage
 from pathlib import Path
@@ -47,7 +46,7 @@ def authorization_url(state: str) -> str:
     return f"{AUTH_URL}?{urlencode(params)}"
 
 
-def _migrate_legacy_credentials(token_file: Path) -> None:
+def _migrate_legacy_credentials(token_file) -> None:
     user_id = C.current_user_id()
     if not user_id or token_file.exists():
         return
@@ -66,17 +65,14 @@ def _migrate_legacy_credentials(token_file: Path) -> None:
     if not isinstance(credentials, dict) or not credentials.get("refresh_token"):
         return
 
-    token_file.parent.mkdir(parents=True, exist_ok=True)
-    temporary = token_file.with_name(f".{token_file.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp")
     try:
-        temporary.write_bytes(payload)
-        if os.name == "posix":
-            temporary.chmod(0o600)
-        temporary.replace(token_file)
-        legacy_file.unlink(missing_ok=True)
-    except OSError as ex:
-        temporary.unlink(missing_ok=True)
+        token_file.write_bytes(payload)
+    except Exception as ex:
         raise GmailError("Impossible de restaurer la connexion Gmail de ton compte existant.") from ex
+    try:
+        legacy_file.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _read_credentials() -> dict:
@@ -95,12 +91,15 @@ def _read_credentials() -> dict:
 
 def _write_credentials(credentials: dict) -> None:
     path = C.user_path(C.GOOGLE_TOKEN_FILE)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(credentials), encoding="utf-8")
-    if os.name == "posix":
-        temporary.chmod(0o600)
-    temporary.replace(path)
+    if isinstance(path, Path):  # exécution locale sans compte : fichier privé sur disque
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text(json.dumps(credentials), encoding="utf-8")
+        if os.name == "posix":
+            temporary.chmod(0o600)
+        temporary.replace(path)
+    else:
+        path.write_text(json.dumps(credentials), encoding="utf-8")
 
 
 def _request_json(url: str, *, data: dict | None = None, headers: dict | None = None) -> dict:

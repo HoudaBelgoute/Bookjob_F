@@ -1,0 +1,26 @@
+# Jamais envoyé à Vercel : secrets, données personnelles locales, artefacts.
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/.venv
+**/venv
+**/__pycache__
+**/.pytest_cache
+frontend/dist
+backend/tests
+backend/scripts
+backend/data/users
+backend/data/uploads
+backend/data/auth.sqlite3*
+backend/data/state.json
+backend/data/profil.json
+backend/data/suivi.csv
+backend/data/email_confirmations.json
+backend/data/google_oauth_token.json
+backend/data/geocode_cache.json
+backend/data/donnees_nettoyees_pipeline.xlsx
+backend/data/donnees_brutes_collecte_*.xlsx
+docs
+*.zip
+*.log

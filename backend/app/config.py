@@ -16,14 +16,8 @@ SUIVI = DATA_DIR / "suivi.csv"
 PROFIL = DATA_DIR / "profil.json"
 STATE = DATA_DIR / "state.json"
 GEOCACHE = DATA_DIR / "geocode_cache.json"
-
-
-
-for d in (DATA_DIR, CV_SENT_DIR, CV_LIB_DIR):
-    try:
-        d.mkdir(parents=True, exist_ok=True)
-    except OSError:  # Vercel : disque en lecture seule
-        pass
+# Tout ce qui est écrit à l'exécution (fichiers utilisateur, cache) est stocké dans Supabase :
+# le disque de Vercel est en lecture seule. DATA_DIR ne contient que les données livrées (Excel).
 
 MAX_UPLOAD = 5 * 1024 * 1024
 ALLOWED_CV_EXT = {"pdf"}
@@ -48,25 +42,24 @@ def current_user_id() -> str | None:
     return _CURRENT_USER_ID.get()
 
 
-def user_data_dir(user_id: str | None = None) -> Path | None:
+def user_blob_key(path: Path) -> str:
+    try:
+        return Path(path).relative_to(DATA_DIR).as_posix()
+    except ValueError:
+        return f"private/{Path(path).name}"
+
+
+def user_path(path: Path, user_id: str | None = None):
+    """Emplacement privé de l'utilisateur courant, stocké dans Supabase (table user_files).
+
+    Sans utilisateur connecté (scripts locaux), renvoie le chemin disque inchangé.
+    """
     user_id = user_id or current_user_id()
     if not user_id:
-        return None
-    base = Path("/tmp/bookjob") if os.getenv("VERCEL") else DATA_DIR
-    return base / "users" / user_id
-
-
-def user_path(path: Path) -> Path:
-    root = user_data_dir()
-    if root is None:
         return path
-    try:
-        relative = Path(path).relative_to(DATA_DIR)
-    except ValueError:
-        relative = Path("private") / Path(path).name
-    target = root / relative
-    target.parent.mkdir(parents=True, exist_ok=True)
-    return target
+    from .blobs import BlobPath
+
+    return BlobPath(user_id, user_blob_key(path))
 
 
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")

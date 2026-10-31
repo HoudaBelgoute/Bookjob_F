@@ -11,7 +11,7 @@ from app import email_confirmations
 from app import main
 
 
-def test_login_protects_api_and_sets_session_cookie(monkeypatch, tmp_path, supabase_client):
+def test_login_protects_api_and_sets_session_cookie(monkeypatch, tmp_path, db_conn):
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
     monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
@@ -30,14 +30,11 @@ def test_login_protects_api_and_sets_session_cookie(monkeypatch, tmp_path, supab
     assert response.status_code == 201
     assert response.headers["set-cookie"].startswith("bookjob_session=")
     assert response.json()["user"]["full_name"] == "Candidate Example"
-    saved_user = (
-        supabase_client.table("users")
-        .select("email, full_name")
-        .eq("email", "candidate@example.com")
-        .execute()
-        .data
-    )
-    assert saved_user == [{"email": "candidate@example.com", "full_name": "Candidate Example"}]
+    saved_user = db_conn.execute(
+        "SELECT email, full_name FROM users WHERE email = %s",
+        ("candidate@example.com",),
+    ).fetchone()
+    assert saved_user == ("candidate@example.com", "Candidate Example")
     assert client.get("/api/profile").json()["profile"]["nom"] == "Candidate Example"
     assert client.get("/api/meta").status_code == 200
     application = client.post("/api/tracking", json={

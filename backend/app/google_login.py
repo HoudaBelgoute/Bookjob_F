@@ -7,7 +7,8 @@ from urllib.parse import urlencode
 
 import requests
 
-from . import config as C, gmail
+from . import gmail
+from . import config as C
 
 LOGIN_SCOPES = "openid email profile"
 STATE_PREFIX = "login."  # secrets.token_urlsafe ne produit jamais de « . » : pas de confusion avec Gmail

@@ -4,8 +4,27 @@ Le design BookJob (React) branché sur le backend de l'app Streamlit « Stages M
 Les 374 entreprises du fichier Google Maps nettoyé remplacent les offres de démonstration.
 
 ## Lancer (Windows)
-Double-cliquez `start.bat` → http://localhost:8000
+Copiez `backend/.env.example` en `backend/.env` et renseignez au minimum `DATABASE_URL` (Supabase), puis double-cliquez `start.bat` → http://localhost:8000
 (Linux/Mac : `./start.sh`). Python 3.10+ et Node.js/npm requis. Les scripts installent les dépendances manquantes, compilent l'interface, puis lancent l'API.
+
+## Base de données : Supabase
+1. Crée un projet sur https://supabase.com, puis **Connect → Transaction pooler** et copie l'URI (port 6543) dans `DATABASE_URL`.
+2. Les tables sont créées automatiquement au premier accès. Tu peux aussi exécuter `backend/supabase/schema.sql` dans le SQL Editor.
+3. Données d'une ancienne installation (SQLite `backend/data/auth.sqlite3` + `backend/data/users/`) :
+   ```
+   cd backend
+   python -m scripts.migrate_local_to_supabase           # simulation
+   python -m scripts.migrate_local_to_supabase --apply   # copie vers Supabase
+   ```
+   Une fois la migration vérifiée, ces fichiers locaux peuvent être supprimés.
+
+## Déploiement Vercel
+Le fichier `vercel.json` déclare deux services : `frontend` (Vite, build statique) et `backend` (FastAPI, `backend/app/main.py`). `/api/*` et `/dash/*` vont au backend, le reste au frontend.
+1. Pousse le dépôt sur GitHub et importe-le dans Vercel (racine du projet = dossier contenant `vercel.json`, sans framework preset).
+2. Dans **Settings → Environment Variables**, ajoute : `DATABASE_URL`, `BOOKJOB_ENV=production`, `BOOKJOB_PUBLIC_URL=https://<ton-domaine>`, `CRON_SECRET` (chaîne aléatoire), et selon les besoins `GROQ_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI=https://<ton-domaine>/api/google/callback`.
+3. Déploie. Le cron Vercel appelle `/api/cron/email-sync` une fois par jour (plan Hobby) pour synchroniser Gmail ; augmente la fréquence dans `vercel.json` sur un plan Pro.
+
+`.vercelignore` exclut les secrets (`.env`), les tests et toutes les données personnelles locales.
 
 ## Développement
 ```
@@ -66,9 +85,9 @@ Pour le site hébergé, configurez `XAI_API_KEY` et `XAI_MODEL` dans les variabl
 ## Comptes, sessions et données personnelles
 L'application affiche la connexion au démarrage. L'inscription demande le nom complet, l'adresse e-mail et un mot de passe ; le nom et l'e-mail sont préremplis dans le profil. Le mot de passe est haché et les données sont stockées dans un espace privé par utilisateur. Les cookies de session sont `HttpOnly`, invalidés côté serveur à la déconnexion et expirent après 8 heures. Seule la session du site est fermée lors de la déconnexion : les données du compte et l'autorisation Gmail sont conservées. Les routes API et Dash vérifient la session côté serveur.
 
-Configurez `BOOKJOB_ENV=production` derrière HTTPS. L'authentification utilise `backend/data/auth.sqlite3` par défaut (ou le chemin `BOOKJOB_AUTH_DB`) et nécessite un volume privé persistant. La première inscription importe les données historiques locales dans le compte initial ; aucun jeton Gmail historique n'est copié. Chaque utilisateur connecte son propre Gmail. Les inscriptions publiques sont activées par défaut ; définissez `BOOKJOB_REGISTRATION_KEY` pour exiger une clé aux inscriptions suivantes. Ne placez pas la base d'authentification, les données utilisateur ou les CV dans un stockage public.
+Configurez `BOOKJOB_ENV=production` derrière HTTPS. Toutes les données (comptes, sessions, profil, suivi, favoris, CV, avatar, jetons Gmail, confirmations) sont stockées dans **Supabase (Postgres)** via `DATABASE_URL` ; aucun fichier n'est écrit sur le disque du serveur. Les fichiers privés sont dans la table `user_files` (RLS activée : inaccessibles par l'API publique Supabase). La première inscription importe les données historiques locales dans le compte initial. Chaque utilisateur connecte son propre Gmail. Les inscriptions publiques sont activées par défaut ; définissez `BOOKJOB_REGISTRATION_KEY` pour exiger une clé aux inscriptions suivantes.
 
-Pour lancer les tests backend : `cd backend && python -m pytest tests`.
+Pour lancer les tests backend (ils écrivent dans la base : utilise un projet Supabase de test) : `cd backend && TEST_DATABASE_URL=... python -m pytest tests`.
 
 ### Connexion avec Google
 Si `GOOGLE_OAUTH_CLIENT_ID` et `GOOGLE_OAUTH_CLIENT_SECRET` sont configurés, l'écran de connexion affiche « Continuer avec Google ». Ce flux demande seulement `openid email profile`, vérifie le paramètre `state` (cookie `HttpOnly`) et n'accepte que les adresses e-mail vérifiées par Google. Un compte BookJob existant avec la même adresse est réutilisé ; sinon un compte est créé (soumis à `BOOKJOB_REGISTRATION_KEY` si elle est définie et qu'un compte existe déjà). L'accès Gmail reste une autorisation distincte. Ajoute les scopes `openid`, `email` et `profile` à l'écran de consentement.
@@ -79,7 +98,7 @@ Si `GOOGLE_OAUTH_CLIENT_ID` et `GOOGLE_OAUTH_CLIENT_SECRET` sont configurés, l'
 ### Configuration OAuth Google (une fois par déploiement)
 Dans Google Cloud Console, active l'API Gmail, crée un client OAuth de type « Application Web », configure l'écran de consentement et autorise les scopes `https://www.googleapis.com/auth/gmail.send`, `https://www.googleapis.com/auth/gmail.readonly` et `https://www.googleapis.com/auth/gmail.compose`. L'accès lecture est utilisé uniquement pour rechercher et lire les réponses de recrutement. BookJob crée un brouillon adressé à l'entreprise et ne l'envoie qu'après l'action de confirmation dans l'application ; il n'envoie pas les candidatures automatiquement. Ajoute l'URI de redirection exacte, par exemple `http://localhost:8000/api/google/callback` en local ou `https://ton-domaine/api/google/callback` en production. Configure `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` et `GOOGLE_OAUTH_REDIRECT_URI` dans l'environnement privé du backend. En mode « Testing », ajoute les comptes qui utiliseront l'application comme utilisateurs test.
 
-L'utilisateur connecte ensuite son compte depuis la page Candidatures et autorise les scopes Google affichés. BookJob ne demande ni ne stocke son mot de passe Gmail ni un mot de passe d'application. Les jetons OAuth sont enregistrés dans le répertoire privé de chaque compte ; sur un hébergeur, le répertoire de données doit donc être un volume persistant et privé. Définis aussi `BOOKJOB_PUBLIC_URL` sur l'URL HTTPS publique du backend pour générer les liens de confirmation, et conserve `EMAIL_CONFIRMATIONS_FILE` sur un volume privé et persistant.
+L'utilisateur connecte ensuite son compte depuis la page Candidatures et autorise les scopes Google affichés. BookJob ne demande ni ne stocke son mot de passe Gmail ni un mot de passe d'application. Les jetons OAuth sont enregistrés dans l'espace privé Supabase de chaque compte. Définis aussi `BOOKJOB_PUBLIC_URL` sur l'URL HTTPS publique pour générer les liens de confirmation.
 
 La page Candidatures affiche l'état de connexion et de lecture, permet de déclencher une synchronisation, et présente les e-mails ambigus pour association manuelle. Le worker vérifie périodiquement les nouveaux messages (toutes les 15 minutes). Les messages reconnus sans association fiable ne changent pas de statut automatiquement. La synchronisation et l'envoi nécessitent la configuration OAuth et l'autorisation Gmail de l'utilisateur sur les trois scopes. Si Gmail était déjà connecté avant l'ajout du scope de brouillon, reconnecte le compte pour renouveler l'autorisation. Un client OAuth en mode « Testing » peut nécessiter une nouvelle autorisation après sept jours. Pour un usage durable, configure le consentement Google en mode production et complète les étapes de vérification Google requises pour les scopes Gmail.
 
@@ -96,4 +115,4 @@ La page Candidatures affiche l'état de connexion et de lecture, permet de décl
 Le tableau de bord React habituel reste disponible à l'accueil. Pour les graphiques interactifs Dash, ouvre « Ouvrir le tableau analytique interactif » ou va sur `/dash/`. Il affiche les candidatures suivies, les envois et entretiens, un graphique filtrable par statut, leur évolution mensuelle et les entreprises par secteur. Dash est servi par le backend FastAPI et utilise les mêmes données BookJob ; il est également protégé par la connexion BookJob si celle-ci est activée.
 
 ## Limites connues
-La synchronisation des réponses est disponible uniquement avec Gmail ; Outlook n'est pas intégré. La synchronisation automatique nécessite une configuration OAuth valide, un accès Gmail autorisé et un serveur qui reste en fonctionnement. Les statistiques reflètent les candidatures et les messages effectivement enregistrés ; l'absence de réponse n'est jamais considérée comme un refus.
+La synchronisation des réponses est disponible uniquement avec Gmail ; Outlook n'est pas intégré. La synchronisation automatique nécessite une configuration OAuth valide et un accès Gmail autorisé ; sur Vercel elle passe par le cron `/api/cron/email-sync` (en local, un worker tourne toutes les 15 minutes). Les fichiers importés sont limités à 5 Mo (stockés dans Postgres). Les statistiques reflètent les candidatures et les messages effectivement enregistrés ; l'absence de réponse n'est jamais considérée comme un refus.
