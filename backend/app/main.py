@@ -90,7 +90,7 @@ class RequireLoginMiddleware:
             "/api/cron/email-sync",
         }
         protected_api = path.startswith("/api/") and path not in public_api and request.method != "OPTIONS"
-        protected_dash = path == "/dash" or path.startswith("/dash/")
+        protected_dash = path == "/api/dash" or path.startswith("/api/dash/")
         user = accounts.resolve_session(request.cookies.get(C.SESSION_COOKIE_NAME, ""))
 
         if path in {"/api/email/confirm/details", "/api/email/confirm"} and request.method == "POST":
@@ -2040,7 +2040,7 @@ async def unhandled(request: Request, ex: Exception):
 # ---------- front (build Vite) ----------
 _dash_app = dash_dashboard.create_dash_app(S.load_tracking, co.companies_df)
 app.mount(
-    "/dash",
+    "/api/dash",
     WSGIMiddleware(DashUserContextMiddleware(_dash_app.server)),
     name="dash",
 )

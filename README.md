@@ -19,7 +19,7 @@ Copiez `backend/.env.example` en `backend/.env` et renseignez au minimum `DATABA
    Une fois la migration vérifiée, ces fichiers locaux peuvent être supprimés.
 
 ## Déploiement Vercel
-Le fichier `vercel.json` déclare deux services : `frontend` (Vite, build statique) et `backend` (FastAPI, `backend/app/main.py`). `/api/*` et `/dash/*` vont au backend, le reste au frontend.
+Le fichier `vercel.json` déclare deux services : `frontend` (Vite, build statique) et `backend` (FastAPI, `backend/app/main.py`). `/api/*` et `/api/dash/*` vont au backend, le reste au frontend.
 1. Pousse le dépôt sur GitHub et importe-le dans Vercel (racine du projet = dossier contenant `vercel.json`, sans framework preset).
 2. Dans **Settings → Environment Variables**, ajoute : `DATABASE_URL`, `BOOKJOB_ENV=production`, `BOOKJOB_PUBLIC_URL=https://<ton-domaine>`, `CRON_SECRET` (chaîne aléatoire), et selon les besoins `GROQ_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI=https://<ton-domaine>/api/google/callback`.
 3. Déploie. Le cron Vercel appelle `/api/cron/email-sync` une fois par jour (plan Hobby) pour synchroniser Gmail ; augmente la fréquence dans `vercel.json` sur un plan Pro.
@@ -112,7 +112,7 @@ La page Candidatures affiche l'état de connexion et de lecture, permet de décl
 - Positions sur la carte : niveau quartier (pas de GPS dans l'export), sauf géocodage Google activé.
 
 ## Tableau analytique Plotly Dash
-Le tableau de bord React habituel reste disponible à l'accueil. Pour les graphiques interactifs Dash, ouvre « Ouvrir le tableau analytique interactif » ou va sur `/dash/`. Il affiche les candidatures suivies, les envois et entretiens, un graphique filtrable par statut, leur évolution mensuelle et les entreprises par secteur. Dash est servi par le backend FastAPI et utilise les mêmes données BookJob ; il est également protégé par la connexion BookJob si celle-ci est activée.
+Le tableau de bord React habituel reste disponible à l'accueil. Pour les graphiques interactifs Dash, ouvre « Ouvrir le tableau analytique interactif » ou va sur `/api/dash/`. Il affiche les candidatures suivies, les envois et entretiens, un graphique filtrable par statut, leur évolution mensuelle et les entreprises par secteur. Dash est servi par le backend FastAPI et utilise les mêmes données BookJob ; il est également protégé par la connexion BookJob si celle-ci est activée.
 
 ## Limites connues
 La synchronisation des réponses est disponible uniquement avec Gmail ; Outlook n'est pas intégré. La synchronisation automatique nécessite une configuration OAuth valide et un accès Gmail autorisé ; sur Vercel elle passe par le cron `/api/cron/email-sync` (en local, un worker tourne toutes les 15 minutes). Les fichiers importés sont limités à 5 Mo (stockés dans Postgres). Les statistiques reflètent les candidatures et les messages effectivement enregistrés ; l'absence de réponse n'est jamais considérée comme un refus.

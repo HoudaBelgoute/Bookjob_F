@@ -90,7 +90,7 @@ def _sector_figure(load_companies):
 def create_dash_app(load_tracking, load_companies) -> Dash:
     app = Dash(
         __name__,
-        requests_pathname_prefix="/dash/",
+        requests_pathname_prefix="/api/dash/",
         routes_pathname_prefix="/",
         title="BookJob — Analyse",
         update_title="Mise à jour…",

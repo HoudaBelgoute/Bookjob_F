@@ -13,8 +13,6 @@
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": { "service": "backend" } },
-    { "source": "/dash", "destination": { "service": "backend" } },
-    { "source": "/dash/(.*)", "destination": { "service": "backend" } },
     { "source": "/(.*)", "destination": { "service": "frontend" } }
   ],
   "crons": [

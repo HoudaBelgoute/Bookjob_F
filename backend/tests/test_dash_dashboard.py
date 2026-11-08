@@ -48,11 +48,11 @@ def _authenticated_client(monkeypatch, tmp_path):
 
 def test_dash_dashboard_is_mounted_and_serves_interactive_layout(monkeypatch, tmp_path):
     client = _authenticated_client(monkeypatch, tmp_path)
-    page = client.get("/dash/")
-    layout = client.get("/dash/_dash-layout")
+    page = client.get("/api/dash/")
+    layout = client.get("/api/dash/_dash-layout")
 
     assert page.status_code == 200
-    assert "/dash/_favicon.ico" in page.text
+    assert "/api/dash/_favicon.ico" in page.text
     assert layout.status_code == 200
     assert {
         "status-filter",
@@ -62,7 +62,7 @@ def test_dash_dashboard_is_mounted_and_serves_interactive_layout(monkeypatch, tm
     }.issubset(set(_component_ids(layout.json())))
 
     update = client.post(
-        "/dash/_dash-update-component",
+        "/api/dash/_dash-update-component",
         json={
             "output": "..status-chart.figure...timeline-chart.figure..",
             "outputs": [
@@ -84,7 +84,7 @@ def test_dash_dashboard_requires_bookjob_login(monkeypatch, tmp_path):
     accounts.initialize()
     client = TestClient(app, follow_redirects=False)
 
-    response = client.get("/dash/")
+    response = client.get("/api/dash/")
 
     assert response.status_code == 303
     assert response.headers["location"] == "/"
@@ -106,8 +106,8 @@ def test_dash_dashboard_uses_the_authenticated_accounts_tracking(monkeypatch, tm
     })
     assert registered.status_code == 201
 
-    first_layout = first.get("/dash/_dash-layout")
-    second_layout = second.get("/dash/_dash-layout")
+    first_layout = first.get("/api/dash/_dash-layout")
+    second_layout = second.get("/api/dash/_dash-layout")
 
     assert first_layout.status_code == 200
     assert second_layout.status_code == 200

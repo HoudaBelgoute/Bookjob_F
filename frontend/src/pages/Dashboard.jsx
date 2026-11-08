@@ -34,7 +34,7 @@ export default function Dashboard() {
       <p className="eyebrow">Tableau de bord</p>
       <h1 className="page-title mt-3">Bonjour {d.nom ? d.nom.split(' ')[0] : ''}</h1>
       <p className="mt-3 text-[16px] text-muted">Voici où en sont vos recherches de stage aujourd’hui.</p>
-      <a href="/dash/" className="btn-outline mt-5">Ouvrir le tableau analytique interactif</a>
+      <a href="/api/dash/" className="btn-outline mt-5">Ouvrir le tableau analytique interactif</a>
 
       {k.relances > 0 && (
         <Link to="/candidatures" className="mt-6 block rounded-xl bg-gold-soft px-4 py-3 text-[14px] text-gold-ink">
