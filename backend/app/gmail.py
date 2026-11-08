@@ -267,11 +267,58 @@ def _gmail_post(url: str, payload: dict, operation: str):
         if response.status_code == 401 and attempt == 0:
             access_token = _access_token(force_refresh=True)
             continue
+        if response.status_code == 403:
+            reasons = _gmail_error_reasons(response)
+            if reasons & {"insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT"}:
+                raise GmailError(
+                    "L’autorisation Gmail nécessaire manque. Clique sur « Renouveler Gmail » "
+                    "et accepte l’accès aux brouillons (gmail.compose)."
+                )
+            if reasons & {"accessNotConfigured", "serviceDisabled", "SERVICE_DISABLED"}:
+                raise GmailError(
+                    "L’API Gmail n’est pas activée dans le projet Google Cloud de BookJob. "
+                    "Active « Gmail API » dans Google Cloud Console, puis réessaie."
+                )
+            if reasons & {"domainPolicy", "ORG_RESTRICTION"}:
+                raise GmailError(
+                    "La politique Google Workspace de ce compte bloque l’accès Gmail. "
+                    "Demande à l’administrateur du domaine d’autoriser l’application BookJob."
+                )
         raise GmailError(f"Gmail a refusé l'opération « {operation} » (HTTP {response.status_code}).")
     raise GmailError(f"La session Gmail a expiré. {operation} impossible.")
 
 
+def _gmail_error_reasons(response) -> set[str]:
+    try:
+        payload = response.json()
+    except (ValueError, AttributeError):
+        return set()
+    if not isinstance(payload, dict):
+        return set()
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        return set()
+
+    reasons = set()
+    legacy_errors = error.get("errors", [])
+    for item in legacy_errors if isinstance(legacy_errors, list) else []:
+        if isinstance(item, dict) and isinstance(item.get("reason"), str):
+            reasons.add(item["reason"])
+    details = error.get("details", [])
+    for item in details if isinstance(details, list) else []:
+        if isinstance(item, dict) and isinstance(item.get("reason"), str):
+            reasons.add(item["reason"])
+    if isinstance(error.get("status"), str):
+        reasons.add(error["status"])
+    return reasons
+
+
 def create_draft(message: EmailMessage) -> str:
+    if not status().get("draft_authorized"):
+        raise GmailError(
+            "Reconnecte Gmail et autorise la création de brouillons (gmail.compose) "
+            "pour préparer une candidature."
+        )
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
     response = _gmail_post(
         DRAFTS_URL,

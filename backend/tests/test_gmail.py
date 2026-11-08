@@ -104,6 +104,7 @@ def test_send_refreshes_expired_token_and_posts_mime_message_to_gmail(monkeypatc
 def test_gmail_draft_is_created_and_sent_only_after_request(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_ID", "client-id")
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_REDIRECT_URI", "https://bookjob.example/api/google/callback")
     monkeypatch.setattr(C, "GOOGLE_TOKEN_FILE", tmp_path / "oauth.json")
     C.GOOGLE_TOKEN_FILE.write_text(json.dumps({
         "access_token": "access-token",
@@ -138,6 +139,69 @@ def test_gmail_draft_is_created_and_sent_only_after_request(monkeypatch, tmp_pat
 
     assert calls[1][0] == f"{gmail.DRAFTS_URL}/send"
     assert calls[1][1]["json"] == {"id": "draft-123"}
+
+
+def test_gmail_draft_requires_compose_scope_before_calling_google(monkeypatch, tmp_path):
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_REDIRECT_URI", "https://bookjob.example/api/google/callback")
+    monkeypatch.setattr(C, "GOOGLE_TOKEN_FILE", tmp_path / "oauth.json")
+    C.GOOGLE_TOKEN_FILE.write_text(json.dumps({
+        "access_token": "access-token",
+        "refresh_token": "refresh-token",
+        "expires_at": time.time() + 3600,
+        "email": "person@gmail.com",
+        "scopes": [gmail.GMAIL_SEND_SCOPE],
+    }), encoding="utf-8")
+    monkeypatch.setattr(
+        gmail.requests, "post",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Gmail API should not be called")),
+    )
+
+    try:
+        gmail.create_draft(EmailMessage())
+    except gmail.GmailError as error:
+        assert "gmail.compose" in str(error)
+    else:
+        raise AssertionError("Expected missing Gmail compose scope to be rejected")
+
+
+def test_gmail_draft_403_explains_when_gmail_api_is_disabled(monkeypatch):
+    monkeypatch.setattr(gmail, "_access_token", lambda **_kwargs: "access-token")
+    monkeypatch.setattr(
+        gmail.requests, "post",
+        lambda *_args, **_kwargs: FakeResponse(
+            status_code=403,
+            payload={"error": {"errors": [{"reason": "accessNotConfigured"}]}},
+        ),
+    )
+
+    try:
+        gmail._gmail_post(gmail.DRAFTS_URL, {}, "création du brouillon")
+    except gmail.GmailError as error:
+        assert "API Gmail n’est pas activée" in str(error)
+        assert "Google Cloud" in str(error)
+    else:
+        raise AssertionError("Expected disabled Gmail API to be reported")
+
+
+def test_gmail_draft_403_explains_when_oauth_scope_is_missing(monkeypatch):
+    monkeypatch.setattr(gmail, "_access_token", lambda **_kwargs: "access-token")
+    monkeypatch.setattr(
+        gmail.requests, "post",
+        lambda *_args, **_kwargs: FakeResponse(
+            status_code=403,
+            payload={"error": {"errors": [{"reason": "insufficientPermissions"}]}},
+        ),
+    )
+
+    try:
+        gmail._gmail_post(gmail.DRAFTS_URL, {}, "création du brouillon")
+    except gmail.GmailError as error:
+        assert "Renouveler Gmail" in str(error)
+        assert "gmail.compose" in str(error)
+    else:
+        raise AssertionError("Expected missing OAuth scope to be reported")
 
 
 def test_disconnect_removes_local_credentials_when_google_cannot_be_reached(monkeypatch, tmp_path):
