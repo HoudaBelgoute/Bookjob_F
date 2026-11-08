@@ -57,7 +57,7 @@ function Card({ app, statuts, onMenu, menuOpen, onMove, onRemove, onEdit, onOpen
 }
 
 export default function Applications() {
-  const { tracking, counts, relances, meta, updateTracking, removeTracking, openCompany, refreshTracking } = useStore()
+  const { tracking, counts, relances, meta, settings, setSetting, updateTracking, removeTracking, openCompany, refreshTracking } = useStore()
   const navigate = useNavigate()
   const statuts = meta.statuts
   const [view, setView] = useState('kanban')
@@ -75,6 +75,7 @@ export default function Applications() {
   const [emailSync, setEmailSync] = useState(null)
   const [emailReviews, setEmailReviews] = useState([])
   const [emailSyncBusy, setEmailSyncBusy] = useState(false)
+  const [automaticFollowupBusy, setAutomaticFollowupBusy] = useState(false)
   const [emailSyncError, setEmailSyncError] = useState('')
   const [reviewChoices, setReviewChoices] = useState({})
 
@@ -125,6 +126,19 @@ export default function Applications() {
       try { await refreshEmailSync() } catch { /* Keep the original synchronization error visible. */ }
     } finally {
       setEmailSyncBusy(false)
+    }
+  }
+
+  const setAutomaticFollowups = async (enabled) => {
+    if (enabled && !window.confirm(
+      'BookJob enverra depuis ton Gmail une relance au recruteur après 7 jours sans réponse, une seule fois par candidature envoyée. Continuer ?',
+    )) return
+    setAutomaticFollowupBusy(true)
+    try {
+      const saved = await setSetting({ automaticFollowups: enabled })
+      if (saved) await refreshEmailSync()
+    } finally {
+      setAutomaticFollowupBusy(false)
     }
   }
 
@@ -189,6 +203,45 @@ export default function Applications() {
               <RefreshCw size={16} className={emailSyncBusy ? 'animate-spin' : ''} />{emailSyncBusy ? 'Synchronisation…' : 'Synchroniser'}
             </button>
           </div>
+        </div>
+        <div className="mt-4 border-t border-line pt-3">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={!!settings.automaticFollowups}
+              disabled={automaticFollowupBusy || (!settings.automaticFollowups && (!emailSync?.gmail?.connected || !emailSync.gmail.read_authorized || !emailSync.gmail.send_authorized))}
+              onChange={(event) => setAutomaticFollowups(event.target.checked)}
+              className="mt-1 h-4 w-4 accent-primary"
+            />
+            <span>
+              <span className="block text-[13px] font-semibold">Relances automatiques par e-mail</span>
+              <span className="mt-0.5 block text-[12px] text-muted">
+                Après 7 jours sans réponse, une seule relance depuis Gmail pour chaque candidature marquée « Candidature envoyée ».
+                BookJob vérifie d’abord les réponses; aucune relance ne part si une réponse est détectée.
+              </span>
+              {emailSync?.automatic_followups?.failed > 0 && (
+                <span role="alert" className="mt-1 block text-[12px] text-red-700">
+                  {emailSync.automatic_followups.failed} relance(s) n’ont pas pu être confirmées. Vérifie Gmail; BookJob ne les renverra pas automatiquement.
+                </span>
+              )}
+              {emailSync?.automatic_followups?.uncertain > 0 && (
+                <span role="alert" className="mt-1 block text-[12px] text-gold-ink">
+                  {emailSync.automatic_followups.uncertain} envoi(s) interrompu(s) ou incertain(s). Vérifie Gmail avant toute relance manuelle.
+                </span>
+              )}
+              {emailSync?.automatic_followups?.sent > 0 && (
+                <span className="mt-1 block text-[12px] text-success">
+                  {emailSync.automatic_followups.sent} relance(s) automatique(s) envoyée(s).
+                </span>
+              )}
+              {(!emailSync?.gmail?.connected || !emailSync.gmail.read_authorized || !emailSync.gmail.send_authorized) && (
+                <span className="mt-1 block text-[12px] text-gold-ink">
+                  Connecte ou renouvelle Gmail avec les autorisations de lecture et d’envoi pour activer cette option.
+                </span>
+              )}
+              {automaticFollowupBusy && <span role="status" className="mt-1 block text-[12px] text-muted">Enregistrement…</span>}
+            </span>
+          </label>
         </div>
         {emailReviews.length > 0 && (
           <div className="mt-5 border-t border-line pt-4">

@@ -18,7 +18,7 @@ LOCK = threading.RLock()  # conservé : d'autres modules peuvent l'importer
 DEFAULT_STATE = {
     "favorites": [],
     "alerts": [],
-    "settings": {"emailAlerts": True, "useProfileForAI": True},
+    "settings": {"emailAlerts": True, "useProfileForAI": True, "automaticFollowups": False},
     "chats": [],
     "cvs": [],          # [{id, name, file, size, uploaded, main}]
     "home": None,       # {lat, lon, label}

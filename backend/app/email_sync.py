@@ -193,9 +193,6 @@ def sync_user(user_id: str) -> dict:
             body = _message_text(message)
             snippet = str(message.get("snippet", "") or body[:500])[:1000]
             classification = classify_message(subject, body or snippet)
-            if not classification:
-                continue
-            suggested_status, classifier_confidence = classification
             eligible = data[
                 data["Date_candidature"].astype(str).str.strip().ne("")
                 & ~data["Statut"].isin(
@@ -205,6 +202,25 @@ def sync_user(user_id: str) -> dict:
             match_index, match_confidence = match_message(
                 eligible, sender, subject, body or snippet,
             )
+            if not classification:
+                if match_index is None or match_confidence < 0.82:
+                    continue
+                record = {
+                    "message_id": message_id,
+                    "tracking_id": str(eligible.loc[match_index, "ID"]),
+                    "classification": "Réponse reçue — à vérifier",
+                    "confidence": match_confidence,
+                    "subject": subject,
+                    "sender": sender,
+                    "received_at": _received_at(message),
+                    "snippet": snippet,
+                    "review_required": True,
+                }
+                if accounts.save_email_message(user_id, record):
+                    added += 1
+                continue
+
+            suggested_status, classifier_confidence = classification
             auto_match = match_index is not None and match_confidence >= 0.82 and classifier_confidence >= 0.85
             tracking_id = str(data.loc[match_index, "ID"]) if auto_match else None
             received_at = _received_at(message)

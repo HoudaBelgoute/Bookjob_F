@@ -197,6 +197,7 @@ def status() -> dict:
     return {
         "configured": True, "connected": bool(sender), "sender": sender,
         "callback_origin": callback_origin,
+        "send_authorized": GMAIL_SEND_SCOPE in credentials.get("scopes", []),
         "read_authorized": GMAIL_READ_SCOPE in credentials.get("scopes", []),
         "draft_authorized": GMAIL_COMPOSE_SCOPE in credentials.get("scopes", []),
     }
@@ -226,6 +227,8 @@ def _access_token(force_refresh: bool = False) -> str:
 
 
 def send(message: EmailMessage) -> None:
+    if not status().get("send_authorized"):
+        raise GmailError("Reconnecte Gmail et autorise l'envoi de messages pour envoyer les relances.")
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
     access_token = _access_token()
     for attempt in range(2):

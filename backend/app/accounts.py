@@ -350,7 +350,43 @@ def email_response_tracking_ids(user_id: str) -> set[str]:
     with _connect() as connection:
         rows = connection.execute(
             """SELECT DISTINCT tracking_id FROM email_messages
-               WHERE user_id = %s AND tracking_id IS NOT NULL AND review_required = 0""",
+               WHERE user_id = %s AND tracking_id IS NOT NULL""",
             (user_id,),
         ).fetchall()
     return {row["tracking_id"] for row in rows}
+
+
+def claim_automatic_followup(user_id: str, tracking_id: str) -> bool:
+    with _connect() as connection:
+        row = connection.execute(
+            """INSERT INTO automatic_followups (user_id, tracking_id, status)
+               VALUES (%s, %s, 'sending')
+               ON CONFLICT (user_id, tracking_id) DO NOTHING
+               RETURNING tracking_id""",
+            (user_id, tracking_id),
+        ).fetchone()
+    return row is not None
+
+
+def finish_automatic_followup(user_id: str, tracking_id: str, status: str, error: str = "") -> None:
+    if status not in {"sent", "failed"}:
+        raise ValueError("Invalid automatic follow-up status.")
+    with _connect() as connection:
+        connection.execute(
+            """UPDATE automatic_followups
+               SET status = %s, sent_at = CASE WHEN %s = 'sent' THEN now() ELSE NULL END, error = %s
+               WHERE user_id = %s AND tracking_id = %s AND status = 'sending'""",
+            (status, status, error[:1000], user_id, tracking_id),
+        )
+
+
+def automatic_followup_summary(user_id: str) -> dict:
+    with _connect() as connection:
+        row = connection.execute(
+            """SELECT COUNT(*) FILTER (WHERE status = 'sent') AS sent,
+                      COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+                      COUNT(*) FILTER (WHERE status = 'sending') AS uncertain
+               FROM automatic_followups WHERE user_id = %s""",
+            (user_id,),
+        ).fetchone()
+    return dict(row) if row else {"sent": 0, "failed": 0, "uncertain": 0}

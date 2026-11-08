@@ -223,6 +223,7 @@ export const useStore = create((set, get) => ({
   setSetting: async (patch) => {
     const r = await get().safe(() => api.saveSettings(patch))
     if (r) set({ settings: r })
+    return !!r
   },
   addAlert: async (query) => {
     const r = await get().safe(() => api.addAlert(query), 'Recherche enregistrée')

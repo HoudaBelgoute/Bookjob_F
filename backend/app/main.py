@@ -29,7 +29,7 @@ import sys
 
 # Fonctionne quel que soit le mode de chargement (uvicorn app.main:app, Vercel "app/main.py", etc.)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app import accounts, ai, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_sync, gmail, google_login, matching, store as S
+from app import accounts, ai, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_followups, email_sync, gmail, google_login, matching, store as S
 
 app = FastAPI(title="BookJob API", version="1.0")
 
@@ -1664,6 +1664,12 @@ def get_settings():
 
 @app.put("/api/settings")
 def put_settings(body: dict):
+    if body.get("automaticFollowups") is True:
+        status = gmail.status()
+        if not status.get("connected") or not status.get("send_authorized"):
+            raise HTTPException(400, "Connecte Gmail et autorise l'envoi de messages avant d'activer les relances.")
+        if not status.get("read_authorized"):
+            raise HTTPException(400, "Autorise aussi la lecture Gmail pour que BookJob vérifie les réponses avant toute relance.")
     st = S.load_state()
     st["settings"].update({k: v for k, v in body.items() if k in S.DEFAULT_STATE["settings"]})
     S.save_state(st)
@@ -1755,13 +1761,20 @@ def email_sync_status():
     state = accounts.email_sync_state(user_id)
     state["gmail"] = gmail.status()
     state["pending_reviews"] = len(accounts.email_messages(user_id, reviews_only=True))
+    state["automatic_followups"] = {
+        **accounts.automatic_followup_summary(user_id),
+        "enabled": bool(S.load_state()["settings"].get("automaticFollowups")),
+    }
     return state
 
 
 @app.post("/api/email-sync/run")
 def run_email_sync():
     try:
-        return email_sync.sync_current_user()
+        result = email_sync.sync_current_user()
+        user_id = C.current_user_id()
+        result["automatic_followups"] = email_followups.send_due_followups(user_id or "")
+        return result
     except gmail.GmailError as ex:
         raise HTTPException(502, str(ex)) from ex
 
@@ -1962,6 +1975,7 @@ async def _email_sync_worker():
                     continue
                 try:
                     await asyncio.to_thread(email_sync.sync_user, user_id)
+                    await asyncio.to_thread(email_followups.send_due_followups, user_id)
                 except (gmail.GmailError, RuntimeError):
                     _LOGGER.warning("Gmail sync failed for account %s", user_id, exc_info=True)
         except Exception:
@@ -2005,6 +2019,7 @@ def cron_email_sync(request: Request):
             if not status.get("connected") or not status.get("read_authorized"):
                 continue
             email_sync.sync_user(user_id)
+            email_followups.send_due_followups(user_id)
             done += 1
         except (gmail.GmailError, RuntimeError):
             _LOGGER.warning("Gmail sync failed for account %s", user_id, exc_info=True)

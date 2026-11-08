@@ -52,6 +52,16 @@ CREATE TABLE IF NOT EXISTS email_sync_state (
     error TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS automatic_followups (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tracking_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('sending', 'sent', 'failed')),
+    attempted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    sent_at TIMESTAMPTZ,
+    error TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (user_id, tracking_id)
+);
+
 CREATE TABLE IF NOT EXISTS confirmation_owners (
     token_hash TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -92,6 +102,7 @@ ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE application_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_sync_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE automatic_followups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmation_owners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_state ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_profile ENABLE ROW LEVEL SECURITY;
