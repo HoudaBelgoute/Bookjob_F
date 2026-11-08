@@ -26,16 +26,16 @@
     @apply text-[32px] font-normal leading-tight tracking-tight text-ink md:text-[38px];
   }
   .card {
-    @apply rounded-2xl border border-line bg-white shadow-card;
+    @apply rounded-2xl border border-line bg-card shadow-card;
   }
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-primary-hover disabled:opacity-50;
   }
   .btn-outline {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:bg-surface;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-card px-4 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:bg-surface;
   }
   .btn-soft {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary-soft px-4 py-2.5 text-[14px] font-semibold text-primary transition-colors hover:bg-[#dbe8f8];
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary-soft px-4 py-2.5 text-[14px] font-semibold text-primary transition-all hover:brightness-95;
   }
   .tag {
     @apply rounded-lg bg-chip px-3 py-1 text-[12px] font-medium text-muted;
@@ -43,6 +43,11 @@
   .demo-pill {
     @apply inline-flex items-center rounded-md bg-gold-soft px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-gold-ink;
   }
+}
+
+/* Mode sombre : les pages qui utilisent bg-white directement */
+.dark .bg-white {
+  background-color: var(--card);
 }
 
 html,

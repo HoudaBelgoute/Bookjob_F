@@ -11,13 +11,16 @@ import {
   LogOut,
   MapPin,
   MoreHorizontal,
+  Moon,
   Search,
   Settings,
+  Sun,
   UserRoundPen,
 } from 'lucide-react'
 
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Link } from 'react-router-dom'
+import useTheme from '../../hooks/useTheme'
 import { useStore } from '../../store/useStore'
 import { useAuth } from '../AuthGate'
 import UserAvatar from '../ui/UserAvatar'
@@ -69,6 +72,7 @@ function Item({ to, label, icon: Icon, end, badge, onNavigate }) {
 export default function Sidebar({ onNavigate, onToggle }) {
   const { profile, completion, avatarUrl } = useStore()
   const { required, signOut: authSignOut } = useAuth()
+  const { theme, toggle: toggleTheme } = useTheme()
   const pct = completion.percent
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const accountMenuRef = useRef(null)
@@ -195,6 +199,18 @@ export default function Sidebar({ onNavigate, onToggle }) {
             </button>
             {accountMenuOpen && (
               <div role="menu" className="absolute bottom-[calc(100%-0.25rem)] right-4 z-50 w-56 rounded-xl border border-white/10 bg-navy-800 p-1.5 shadow-pop">
+                <button
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    toggleTheme()
+                    setAccountMenuOpen(false)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[14px] text-white hover:bg-navy-700"
+                >
+                  {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+                  {theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                </button>
                 <Link
                   role="menuitem"
                   to="/profil"

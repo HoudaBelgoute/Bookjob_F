@@ -19,4 +19,42 @@
   --line: #e4e9f1;
   --surface: #f6f8fb;
   --chip: #eef1f6;
+  --card: #ffffff;
+}
+
+/* Mode sombre : navy profond, jamais noir pur */
+:root.dark {
+  color-scheme: dark;
+
+  /* Barre latérale : le plus profond */
+  --navy-900: #081528;
+  --navy-800: #0f2240;
+  --navy-700: #17305a;
+  --navy-600: #1f4070;
+
+  /* Accent bleu, assez lumineux pour rester lisible */
+  --primary: #3f7de8;
+  --primary-hover: #5a92f0;
+  --primary-soft: #152c52;
+
+  --gold: #d6b565;
+  --gold-soft: #35290f;
+  --gold-ink: #f0cf84;
+
+  --success: #3fc48f;
+  --success-soft: #11382e;
+
+  --violet-soft: #271f4d;
+  --violet-ink: #b9a8f5;
+
+  /* Texte */
+  --ink: #e8eef8;
+  --muted: #9db0cc;
+  --faint: #6f86a8;
+
+  /* Surfaces : fond de page < cartes < puces */
+  --surface: #0c1a30;
+  --card: #132645;
+  --chip: #1b3156;
+  --line: #243a60;
 }
