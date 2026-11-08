@@ -26,7 +26,7 @@ import { useAuth } from '../AuthGate'
 import UserAvatar from '../ui/UserAvatar'
 
 const NAV = [
-  { to: '/', label: 'Tableau de bord', icon: LayoutGrid, end: true },
+  { to: '/tableau-de-bord', label: 'Tableau de bord', icon: LayoutGrid, end: true },
   { to: '/rechercher', label: 'Rechercher', icon: Search },
   { to: '/candidatures', label: 'Mes candidatures', icon: Briefcase, badge: true },
   { to: '/favoris', label: 'Favoris', icon: Bookmark },
@@ -127,7 +127,7 @@ export default function Sidebar({ onNavigate, onToggle }) {
           {logoContent}
         </button>
       ) : (
-        <Link to="/" onClick={onNavigate} className="flex items-center gap-3 border-b border-white/10 px-6 py-4">
+        <Link to="/tableau-de-bord" onClick={onNavigate} className="flex items-center gap-3 border-b border-white/10 px-6 py-4">
           {logoContent}
         </Link>
       )}

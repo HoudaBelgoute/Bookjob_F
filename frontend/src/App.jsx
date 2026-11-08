@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AuthGate from './components/AuthGate'
 import Layout from './components/layout/Layout'
+import LandingPage from './pages/LandingPage'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const SearchPage = lazy(() => import('./pages/SearchPage'))
@@ -19,27 +20,37 @@ const CompanyPage = lazy(() => import('./pages/CompanyPage'))
 
 export default function App() {
   return (
-    <AuthGate>
-      <Suspense fallback={<div className="p-10 text-muted">Chargement…</div>}>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="rechercher" element={<SearchPage />} />
-            <Route path="candidatures" element={<Applications />} />
-            <Route path="favoris" element={<Favorites />} />
-            <Route path="entreprises" element={<Companies />} />
-            <Route path="entreprises/:id" element={<CompanyPage />} />
-            <Route path="carte" element={<MapPage />} />
-            <Route path="cv-studio" element={<CvStudio />} />
-            <Route path="assistant" element={<Navigate to="/" replace />} />
-            <Route path="profil" element={<Profile />} />
-            <Route path="parametres" element={<SettingsPage />} />
-            <Route path="statistiques" element={<Statistics />} />
-            <Route path="formations" element={<Formations />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
-      </Suspense>
-    </AuthGate>
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route
+        path="/*"
+        element={(
+          <AuthGate>
+            <Suspense fallback={<div className="p-10 text-muted">Chargement…</div>}>
+              <Routes>
+                <Route element={<Layout />}>
+                  <Route path="tableau-de-bord" element={<Dashboard />} />
+                  <Route path="connexion" element={<Navigate to="/tableau-de-bord" replace />} />
+                  <Route path="inscription" element={<Navigate to="/tableau-de-bord" replace />} />
+                  <Route path="rechercher" element={<SearchPage />} />
+                  <Route path="candidatures" element={<Applications />} />
+                  <Route path="favoris" element={<Favorites />} />
+                  <Route path="entreprises" element={<Companies />} />
+                  <Route path="entreprises/:id" element={<CompanyPage />} />
+                  <Route path="carte" element={<MapPage />} />
+                  <Route path="cv-studio" element={<CvStudio />} />
+                  <Route path="assistant" element={<Navigate to="/tableau-de-bord" replace />} />
+                  <Route path="profil" element={<Profile />} />
+                  <Route path="parametres" element={<SettingsPage />} />
+                  <Route path="statistiques" element={<Statistics />} />
+                  <Route path="formations" element={<Formations />} />
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Routes>
+            </Suspense>
+          </AuthGate>
+        )}
+      />
+    </Routes>
   )
 }

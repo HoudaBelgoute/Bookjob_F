@@ -1,5 +1,5 @@
 // Client minimal de l'API FastAPI (même origine en production, proxy Vite en dev).
-async function req(path, { method = 'GET', body, form } = {}) {
+async function req(path, { method = 'GET', body, form, signal } = {}) {
   const opts = { method, headers: {} }
   if (form) opts.body = form
   else if (body !== undefined) {
@@ -8,7 +8,7 @@ async function req(path, { method = 'GET', body, form } = {}) {
   }
   let res
   try {
-    res = await fetch(`/api${path}`, { ...opts, cache: 'no-store', credentials: 'same-origin' })
+    res = await fetch(`/api${path}`, { ...opts, cache: 'no-store', credentials: 'same-origin', signal })
   } catch {
     throw new Error('Serveur injoignable. Vérifiez que le backend est démarré.')
   }
@@ -40,7 +40,7 @@ const qs = (params) => {
 }
 
 export const api = {
-  authStatus: () => req('/auth/status'),
+  authStatus: (signal) => req('/auth/status', { signal }),
   login: (email, password) => req('/auth/login', { method: 'POST', body: { email, password } }),
   register: (full_name, email, password, registration_key) => req('/auth/register', {
     method: 'POST',
