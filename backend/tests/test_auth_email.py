@@ -434,6 +434,21 @@ def test_application_send_failure_is_not_reported_as_sent(monkeypatch, tmp_path)
     assert state["tracking"].iloc[0]["Statut"] == "À envoyer"
 
 
+def test_application_send_rejects_sender_address_as_recruiter(monkeypatch, tmp_path):
+    state = _configure_direct_send(monkeypatch, tmp_path)
+
+    with pytest.raises(HTTPException) as exc_info:
+        main.send_application(
+            "EXT-TEST", "SENDER@gmail.com", "Candidature stage Data",
+            "Bonjour, voici ma candidature.", "", "Stage Data", "", "", None,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "Gmail expéditeur" in exc_info.value.detail
+    assert state["messages"] == []
+    assert state["tracking"].iloc[0]["Statut"] == "À envoyer"
+
+
 def test_preview_email_requires_separate_one_time_confirmation(monkeypatch, tmp_path):
     state, client = _configure_application(monkeypatch, tmp_path)
 

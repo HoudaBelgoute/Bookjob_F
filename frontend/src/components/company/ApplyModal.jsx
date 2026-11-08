@@ -4,6 +4,9 @@ import Modal from '../ui/Modal'
 import { useStore } from '../../store/useStore'
 import { buildWhatsAppUrl, normalizeWhatsAppNumber } from '../../utils/whatsapp'
 
+const isValidEmail = (value) => typeof value === 'string'
+  && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim())
+
 export default function ApplyModal({
   company,
   contactMethod: initialContactMethod = 'email',
@@ -23,9 +26,15 @@ export default function ApplyModal({
   const [candidatePhone, setCandidatePhone] = useState(profile.tel || '')
   const [candidateCity, setCandidateCity] = useState(profile.ville || '')
   const offerUrl = existing?.lien_offre || ''
-  const [recipient, setRecipient] = useState(existing?.email || company?.email || '')
+  const [recipient, setRecipient] = useState(
+    [existing?.email, company?.email]
+      .find((value) => isValidEmail(value) && value.trim().toLowerCase() !== meta?.email?.sender?.toLowerCase())
+      ?.trim() || '',
+  )
   const [contactEmails, setContactEmails] = useState([])
   const [emailLookupStatus, setEmailLookupStatus] = useState('')
+  const [emailLookupBusy, setEmailLookupBusy] = useState(false)
+  const [emailLookupAttempt, setEmailLookupAttempt] = useState(0)
   const [selectedEmailSource, setSelectedEmailSource] = useState('')
   const [gmailStatus, setGmailStatus] = useState(meta?.email || {})
   const [cvId, setCvId] = useState((cvs.find((c) => c.main) || cvs[0])?.id || '')
@@ -69,26 +78,52 @@ export default function ApplyModal({
   }, [meta?.email?.callback_origin])
 
   useEffect(() => {
-    if (!company?.id || existing?.email || company?.email || !company?.site_web) return
+    const savedEmail = [existing?.email, company?.email]
+      .find((value) => isValidEmail(value) && value.trim().toLowerCase() !== gmailStatus?.sender?.toLowerCase())
+      ?.trim() || ''
+    if (!recipientTouched.current && savedEmail) {
+      setRecipient(savedEmail)
+      setEmailLookupStatus('Adresse chargée depuis les informations de l’entreprise ou du suivi.')
+      setContactEmails([])
+      setEmailLookupBusy(false)
+      return
+    }
+    if (!company?.id) {
+      setEmailLookupStatus('Aucune entreprise du répertoire sélectionnée : saisissez l’adresse du recruteur.')
+      setContactEmails([])
+      setEmailLookupBusy(false)
+      return
+    }
+    const siteUrl = typeof company.site_web === 'string' ? company.site_web.trim() : ''
+    if (!siteUrl) {
+      setEmailLookupStatus('Aucun site officiel enregistré pour cette entreprise : l’adresse du recruteur doit être saisie manuellement.')
+      setContactEmails([])
+      setEmailLookupBusy(false)
+      return
+    }
     let active = true
+    setContactEmails([])
+    setEmailLookupBusy(true)
     setEmailLookupStatus('Recherche d’adresses publiques sur le site officiel…')
     api.discoverCompanyEmails(company.id).then(({ emails }) => {
       if (!active) return
       setContactEmails(emails)
       if (emails.length) {
-        setEmailLookupStatus('')
+        setEmailLookupStatus('Adresse publique trouvée sur le site officiel. Vérifiez qu’elle convient avant l’envoi.')
         if (!recipientTouched.current) {
           setRecipient(emails[0].email)
           setSelectedEmailSource(emails[0].source)
         }
       } else {
-        setEmailLookupStatus('Aucune adresse e-mail publique trouvée sur le site officiel. Saisis ou vérifie l’adresse avant l’envoi.')
+        setEmailLookupStatus('Aucune adresse e-mail publique trouvée sur le site officiel. BookJob ne peut pas deviner celle du recruteur.')
       }
     }).catch((error) => {
       if (active) setEmailLookupStatus(`Recherche impossible : ${error.message}`)
+    }).finally(() => {
+      if (active) setEmailLookupBusy(false)
     })
     return () => { active = false }
-  }, [company?.id, company?.email, company?.site_web, existing?.email])
+  }, [company?.id, company?.email, company?.site_web, existing?.email, emailLookupAttempt, gmailStatus?.sender])
 
   const submit = async (e) => {
     e.preventDefault()
@@ -107,6 +142,9 @@ export default function ApplyModal({
     if (!consent) errors.consent = 'Votre accord est nécessaire pour transmettre les informations au recruteur.'
     if (contactMethod === 'email' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient.trim())) {
       errors.recipient = 'Indiquez une adresse e-mail valide pour le recruteur.'
+    }
+    if (contactMethod === 'email' && recipient.trim().toLowerCase() === gmailStatus?.sender?.trim().toLowerCase()) {
+      errors.recipient = 'Cette adresse est votre Gmail expéditeur, pas celle du recruteur. Indiquez l’adresse de l’entreprise.'
     }
     if (contactMethod === 'whatsapp' && !normalizeWhatsAppNumber(phone)) {
       errors.phone = 'Indiquez un numéro WhatsApp valide pour l’entreprise.'
@@ -263,7 +301,7 @@ export default function ApplyModal({
               {sentDetails?.message_id && (
                 <a
                   className="inline-block underline"
-                  href={`https://mail.google.com/mail/u/0/#sent/${encodeURIComponent(sentDetails.message_id)}`}
+                  href={`https://mail.google.com/mail/?authuser=${encodeURIComponent(sentDetails.sender || '')}#sent/${encodeURIComponent(sentDetails.message_id)}`}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -349,7 +387,7 @@ export default function ApplyModal({
                 setRecipient(event.target.value)
                 setSelectedEmailSource('')
                 setFieldErrors((current) => ({ ...current, recipient: '' }))
-              }} className={input} placeholder="recrutement@entreprise.ma" />
+              }} name="recruiter-email" autoComplete="off" className={input} placeholder="Adresse e-mail de l’entreprise, pas votre Gmail" />
               {fieldError('recipient')}
             </label>
           ) : (
@@ -358,7 +396,26 @@ export default function ApplyModal({
               {fieldError('phone')}
             </label>
           )}
-          {contactMethod === 'email' && emailLookupStatus && <p role="status" className="text-[12px] text-muted">{emailLookupStatus}</p>}
+          {contactMethod === 'email' && emailLookupStatus && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-muted">
+              <p role="status">
+                {emailLookupStatus}
+                {company?.site_web && !contactEmails.length && (
+                  <> <a href={company.site_web} target="_blank" rel="noreferrer" className="text-primary underline">Consulter le site officiel</a></>
+                )}
+              </p>
+              {company?.id && company?.site_web && !contactEmails.length && (
+                <button
+                  type="button"
+                  disabled={emailLookupBusy}
+                  onClick={() => setEmailLookupAttempt((attempt) => attempt + 1)}
+                  className="text-primary underline disabled:opacity-50"
+                >
+                  {emailLookupBusy ? 'Recherche…' : 'Rechercher à nouveau'}
+                </button>
+              )}
+            </div>
+          )}
           {contactMethod === 'email' && contactEmails.length > 0 && (
             <div className="text-[12px] text-muted">
               Adresses trouvées : {contactEmails.map((item) => (

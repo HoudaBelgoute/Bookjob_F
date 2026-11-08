@@ -832,6 +832,11 @@ def send_application(
     subject = subject.strip()
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", recipient):
         raise HTTPException(400, "Adresse e-mail destinataire invalide")
+    if recipient.casefold() == str(email_status["sender"]).strip().casefold():
+        raise HTTPException(
+            400,
+            "L'adresse du recruteur correspond au Gmail expéditeur. Indique l'adresse e-mail de l'entreprise.",
+        )
     if not subject or "\r" in subject or "\n" in subject:
         raise HTTPException(400, "Objet d'e-mail invalide")
     if len(body) > 20000 or len(cover_letter) > 20000 or len(offer_description) > 30000:
