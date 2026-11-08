@@ -1,12 +1,12 @@
-import { ArrowRight, Bookmark, Search, Star } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import CompanyLogo from '../components/ui/CompanyLogo'
+import CompanyCard from '../components/company/CompanyCard'
 import { useStore } from '../store/useStore'
 
 export default function Companies() {
-  const { meta, favorites, toggleFavorite, openCompany } = useStore()
+  const { meta, favorites, toggleFavorite } = useStore()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [applied, setApplied] = useState('')
@@ -14,11 +14,26 @@ export default function Companies() {
   const [shown, setShown] = useState(24)
   const [res, setRes] = useState({ total: 0, items: [] })
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
+    let active = true
     setLoading(true)
-    api.companies({ q: applied, secteur: secteur ? [secteur] : [], sort: 'nom', limit: 500 }).then(setRes).finally(() => setLoading(false))
+    setError('')
+    api.companies({ q: applied, secteur: secteur ? [secteur] : [], sort: 'nom', limit: 500 })
+      .then((result) => {
+        if (active) setRes(result)
+      })
+      .catch((err) => {
+        if (active) setError(err.message)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
     setShown(24)
+    return () => {
+      active = false
+    }
   }, [applied, secteur])
 
   return (
@@ -30,7 +45,7 @@ export default function Companies() {
       <form onSubmit={(e) => { e.preventDefault(); setApplied(q) }} className="card mt-8 flex max-w-[1050px] flex-wrap items-center gap-3 p-2.5 pl-5">
         <Search size={20} className="text-muted" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher une entreprise ou un mot-clé" aria-label="Rechercher une entreprise" className="min-w-[200px] flex-1 bg-transparent py-2 text-[15px] outline-none placeholder:text-faint" />
-        <select value={secteur} onChange={(e) => setSecteur(e.target.value)} aria-label="Secteur" className="rounded-xl border border-line bg-white px-3 py-2.5 text-[14px]">
+        <select value={secteur} onChange={(e) => setSecteur(e.target.value)} aria-label="Secteur" className="rounded-xl border border-line bg-card px-3 py-2.5 text-[14px] text-ink">
           <option value="">Tous les secteurs</option>
           {meta.secteurs.map((s) => <option key={s}>{s}</option>)}
         </select>
@@ -39,6 +54,8 @@ export default function Companies() {
 
       {loading ? (
         <p className="mt-10 text-muted">Chargement…</p>
+      ) : error ? (
+        <p role="alert" className="mt-10 text-red-600">{error}</p>
       ) : res.items.length === 0 ? (
         <p className="mt-10 text-muted">Aucune entreprise ne correspond à votre recherche.</p>
       ) : (
@@ -46,26 +63,13 @@ export default function Companies() {
           <p className="mt-6 text-[14px] text-muted"><strong className="text-ink">{res.total}</strong> entreprises</p>
           <div className="mt-3 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {res.items.slice(0, shown).map((c) => (
-              <article key={c.id} className="card flex flex-col p-6">
-                <div className="flex items-start justify-between">
-                  <CompanyLogo company={c} size="xl" />
-                  <button onClick={() => toggleFavorite(c.id)} aria-label="Suivre l’entreprise" className="rounded-lg p-1.5 text-primary hover:bg-surface">
-                    <Bookmark size={22} fill={favorites.includes(c.id) ? 'currentColor' : 'none'} />
-                  </button>
-                </div>
-                <span className="demo-pill mt-5 w-fit border border-[#efdfaa]">Google Maps</span>
-                <h2 className="mt-3 text-[20px] font-normal leading-snug">{c.short}</h2>
-                <p className="mt-1 text-[13px] text-primary">{c.secteur} · {c.quartier}</p>
-                <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-muted">
-                  <Star size={14} /> {c.note != null ? `${c.note} (${c.nb_avis ?? 0} avis)` : 'Non noté'} · {c.site_web ? 'Site web' : 'Sans site web'}
-                </p>
-                <div className="mt-auto flex items-center justify-between border-t border-line pt-5">
-                  <span className="text-[12px] text-muted">Score <strong className="text-ink">{c.score}</strong> · Priorité {c.priorite}</span>
-                  <button onClick={() => { openCompany(c.id); navigate('/rechercher') }} className="flex items-center gap-2 text-[15px] font-semibold text-primary">
-                    Voir l’entreprise <ArrowRight size={17} />
-                  </button>
-                </div>
-              </article>
+              <CompanyCard
+                key={c.id}
+                company={c}
+                favorite={favorites.includes(c.id)}
+                onFavorite={() => toggleFavorite(c.id)}
+                onOpen={() => navigate(`/entreprises/${encodeURIComponent(c.id)}`)}
+              />
             ))}
           </div>
           {shown < res.items.length && <button className="btn-outline mx-auto mt-6 block" onClick={() => setShown(shown + 24)}>Afficher plus</button>}

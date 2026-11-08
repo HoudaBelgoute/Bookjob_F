@@ -15,6 +15,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const Statistics = lazy(() => import('./pages/Statistics'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const Formations = lazy(() => import('./pages/Formations'))
+const CompanyPage = lazy(() => import('./pages/CompanyPage'))
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="candidatures" element={<Applications />} />
             <Route path="favoris" element={<Favorites />} />
             <Route path="entreprises" element={<Companies />} />
+            <Route path="entreprises/:id" element={<CompanyPage />} />
             <Route path="carte" element={<MapPage />} />
             <Route path="cv-studio" element={<CvStudio />} />
             <Route path="assistant" element={<Navigate to="/" replace />} />
