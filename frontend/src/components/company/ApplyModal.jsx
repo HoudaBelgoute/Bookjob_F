@@ -39,9 +39,7 @@ export default function ApplyModal({
   const [result, setResult] = useState(null)
   const [sent, setSent] = useState(false)
   const [confirmationRequested, setConfirmationRequested] = useState(false)
-  const [secureSendPending, setSecureSendPending] = useState(false)
   const [consent, setConsent] = useState(false)
-  const [confirmationExpiresAt, setConfirmationExpiresAt] = useState(null)
   const [coverLetterFile, setCoverLetterFile] = useState(null)
   const ref = useRef(null)
   const letterRef = useRef(null)
@@ -91,34 +89,6 @@ export default function ApplyModal({
     return () => { active = false }
   }, [company?.id, company?.email, company?.site_web, existing?.email])
 
-  useEffect(() => {
-    if (!secureSendPending || !result?.id || sent) return undefined
-    let active = true
-    const checkStatus = async () => {
-      try {
-        const status = await api.applicationSendStatus(result.id)
-        if (!active) return
-        if (status.sent) {
-          setSent(true)
-          setSecureSendPending(false)
-          setErr('')
-          notify('Votre candidature a été envoyée.')
-          refreshTracking().catch((error) => setErr(error.message))
-        } else {
-          setConfirmationExpiresAt(status.expires_at)
-        }
-      } catch (error) {
-        if (active) setErr(error.message)
-      }
-    }
-    checkStatus()
-    const timer = window.setInterval(checkStatus, 3000)
-    return () => {
-      active = false
-      window.clearInterval(timer)
-    }
-  }, [secureSendPending, result?.id, sent, notify, refreshTracking])
-
   const submit = async (e) => {
     e.preventDefault()
     setErr('')
@@ -142,6 +112,10 @@ export default function ApplyModal({
     }
     setFieldErrors(errors)
     if (Object.keys(errors).length) return
+    if (contactMethod === 'email' && !(gmailStatus?.connected && gmailStatus?.send_authorized)) {
+      setErr('Connectez ou renouvelez Gmail et autorisez l’envoi de messages avant de continuer.')
+      return
+    }
 
     const message = body.trim() || `Bonjour,\n\nJe vous adresse ma candidature pour ${poste} au sein de ${ent}. Vous trouverez mon CV${coverLetter.trim() || coverLetterFile ? ' et ma lettre de motivation' : ''} en pièce jointe.\n\nJe reste à votre disposition pour tout complément d’information ou entretien.`
     const candidateDetails = [candidateName.trim(), candidateCity.trim(), candidateEmail.trim(), candidatePhone.trim()]
@@ -153,10 +127,8 @@ export default function ApplyModal({
       : generatedBody
     const subjectLine = `Candidature – ${poste} – ${ent}`
     const whatsappUrl = contactMethod === 'whatsapp' ? buildWhatsAppUrl(phone, externalMessage) : ''
-    const externalWindow = contactMethod === 'whatsapp' || !(gmailStatus?.connected && gmailStatus?.draft_authorized)
-      ? window.open('', '_blank')
-      : null
-    if ((contactMethod === 'whatsapp' || !(gmailStatus?.connected && gmailStatus?.draft_authorized)) && !externalWindow) {
+    const externalWindow = contactMethod === 'whatsapp' ? window.open('', '_blank') : null
+    if (contactMethod === 'whatsapp' && !externalWindow) {
       setErr('Le navigateur a bloqué la fenêtre de contact. Autorisez les pop-ups puis réessayez.')
       return
     }
@@ -183,39 +155,24 @@ export default function ApplyModal({
 
       if (contactMethod === 'whatsapp') {
         externalWindow.location.href = whatsappUrl
-        setSecureSendPending(false)
-        setConfirmationExpiresAt(null)
         setConfirmationRequested(true)
         return
       }
 
-      if (gmailStatus?.connected && gmailStatus?.draft_authorized) {
-        const form = new FormData()
-        form.append('recipient', recipient.trim())
-        form.append('subject', subjectLine)
-        form.append('body', generatedBody)
-        form.append('cover_letter', coverLetter.trim())
-        form.append('offer_title', poste.trim())
-        form.append('offer_url', offerUrl.trim())
-        form.append('offer_description', '')
-        if (coverLetterFile) form.append('cover_letter_file', coverLetterFile)
-        const response = await api.sendApplication(application.id, form)
-        setConfirmationExpiresAt(response.expires_at)
-        setSecureSendPending(true)
-        setConfirmationRequested(true)
-        return
-      }
-
-      const gmailUrl = new URL('https://mail.google.com/mail/')
-      gmailUrl.searchParams.set('view', 'cm')
-      gmailUrl.searchParams.set('fs', '1')
-      gmailUrl.searchParams.set('to', recipient.trim())
-      gmailUrl.searchParams.set('su', subjectLine)
-      gmailUrl.searchParams.set('body', externalMessage)
-      externalWindow.location.href = gmailUrl.toString()
-      setSecureSendPending(false)
-      setConfirmationExpiresAt(null)
+      const form = new FormData()
+      form.append('recipient', recipient.trim())
+      form.append('subject', subjectLine)
+      form.append('body', generatedBody)
+      form.append('cover_letter', coverLetter.trim())
+      form.append('offer_title', poste.trim())
+      form.append('offer_url', offerUrl.trim())
+      form.append('offer_description', '')
+      if (coverLetterFile) form.append('cover_letter_file', coverLetterFile)
+      await api.sendApplication(application.id, form)
+      setSent(true)
       setConfirmationRequested(true)
+      notify(`Votre candidature a été envoyée à ${recipient.trim()}.`)
+      refreshTracking().catch((error) => setErr(error.message))
     } catch (error) {
       if (externalWindow && !externalWindow.closed) externalWindow.close()
       setErr(error.message)
@@ -227,14 +184,16 @@ export default function ApplyModal({
 
   const retryDelivery = async () => {
     setErr('')
+    if (contactMethod === 'email' && !(gmailStatus?.connected && gmailStatus?.send_authorized)) {
+      setErr('Connectez ou renouvelez Gmail et autorisez l’envoi de messages avant de continuer.')
+      return
+    }
     const externalMessage = coverLetter.trim()
       ? `${body.trim()}\n\n--- Lettre de motivation ---\n${coverLetter.trim()}`
       : body.trim()
     const whatsappUrl = contactMethod === 'whatsapp' ? buildWhatsAppUrl(phone, externalMessage) : ''
-    const externalWindow = contactMethod === 'whatsapp' || !(gmailStatus?.connected && gmailStatus?.draft_authorized)
-      ? window.open('', '_blank')
-      : null
-    if ((contactMethod === 'whatsapp' || !(gmailStatus?.connected && gmailStatus?.draft_authorized)) && !externalWindow) {
+    const externalWindow = contactMethod === 'whatsapp' ? window.open('', '_blank') : null
+    if (contactMethod === 'whatsapp' && !externalWindow) {
       setErr('Le navigateur a bloqué la fenêtre de contact. Autorisez les pop-ups puis réessayez.')
       return
     }
@@ -244,36 +203,22 @@ export default function ApplyModal({
         if (!whatsappUrl) throw new Error('Indiquez un numéro WhatsApp marocain valide pour l’entreprise.')
         externalWindow.location.href = whatsappUrl
         setConfirmationRequested(true)
-        setSecureSendPending(false)
-        setConfirmationExpiresAt(null)
         return
       }
-      if (gmailStatus?.connected && gmailStatus?.draft_authorized) {
-        const form = new FormData()
-        form.append('recipient', recipient.trim())
-        form.append('subject', subject.trim())
-        form.append('body', body.trim())
-        form.append('cover_letter', coverLetter.trim())
-        form.append('offer_title', poste.trim())
-        form.append('offer_url', offerUrl.trim())
-        form.append('offer_description', '')
-        if (coverLetterFile) form.append('cover_letter_file', coverLetterFile)
-        const response = await api.sendApplication(result.id, form)
-        setConfirmationExpiresAt(response.expires_at)
-        setSecureSendPending(true)
-        setConfirmationRequested(true)
-        return
-      }
-      const gmailUrl = new URL('https://mail.google.com/mail/')
-      gmailUrl.searchParams.set('view', 'cm')
-      gmailUrl.searchParams.set('fs', '1')
-      gmailUrl.searchParams.set('to', recipient.trim())
-      gmailUrl.searchParams.set('su', subject.trim())
-      gmailUrl.searchParams.set('body', externalMessage)
-      externalWindow.location.href = gmailUrl.toString()
+      const form = new FormData()
+      form.append('recipient', recipient.trim())
+      form.append('subject', subject.trim())
+      form.append('body', body.trim())
+      form.append('cover_letter', coverLetter.trim())
+      form.append('offer_title', poste.trim())
+      form.append('offer_url', offerUrl.trim())
+      form.append('offer_description', '')
+      if (coverLetterFile) form.append('cover_letter_file', coverLetterFile)
+      await api.sendApplication(result.id, form)
+      setSent(true)
       setConfirmationRequested(true)
-      setSecureSendPending(false)
-      setConfirmationExpiresAt(null)
+      notify(`Votre candidature a été envoyée à ${recipient.trim()}.`)
+      refreshTracking().catch((error) => setErr(error.message))
     } catch (error) {
       if (externalWindow && !externalWindow.closed) externalWindow.close()
       setErr(error.message)
@@ -312,16 +257,9 @@ export default function ApplyModal({
             <p role="status" className="rounded-xl border border-success/30 bg-success-soft p-4 text-success">Votre candidature a bien été envoyée.</p>
           ) : confirmationRequested ? (
             <div className="space-y-3 rounded-xl border border-success/30 bg-success-soft p-4 text-[13px]">
-              <p className="font-semibold text-success">{secureSendPending ? `Un e-mail de confirmation a été envoyé à ${gmailStatus?.sender || 'votre compte Gmail'}.` : `Votre message est prêt dans ${contactMethod === 'whatsapp' ? 'WhatsApp' : 'Gmail'}.`}</p>
-              <p>{secureSendPending
-                ? 'Confirmez l’envoi depuis l’e-mail reçu. BookJob actualisera ensuite le suivi.'
-                : contactMethod === 'whatsapp'
-                  ? `Vérifiez le message et ajoutez votre CV${coverLetterFile ? ' et votre lettre' : ''} dans WhatsApp avant l’envoi.`
-                  : `Vérifiez le message et ajoutez votre CV${coverLetterFile ? ' et votre lettre' : ''} si besoin, puis envoyez-le.`}</p>
-              {secureSendPending && confirmationExpiresAt && (
-                <p>Lien valable jusqu’à {new Date(confirmationExpiresAt * 1000).toLocaleTimeString()}.</p>
-              )}
-              {!secureSendPending && (
+              <p className="font-semibold text-success">Votre message est prêt dans WhatsApp.</p>
+              <p>Vérifiez le message et ajoutez votre CV{coverLetterFile ? ' et votre lettre' : ''} dans WhatsApp avant l’envoi.</p>
+              {contactMethod === 'whatsapp' && (
                 <button type="button" disabled={busy} className="btn-outline" onClick={markManualSendComplete}>
                   {busy ? 'Mise à jour…' : 'Confirmer que je l’ai envoyée'}
                 </button>
@@ -342,6 +280,25 @@ export default function ApplyModal({
       ) : (
         <form onSubmit={submit} className="space-y-4">
           <p className="text-[14px] text-muted">{poste} · {ent || 'Entreprise à préciser'}</p>
+          {contactMethod === 'email' && !(gmailStatus?.connected && gmailStatus?.send_authorized) && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-soft p-3">
+              <p className="text-[12px] text-muted">
+                {gmailStatus?.connected
+                  ? 'Renouvelez Gmail et autorisez l’envoi de messages.'
+                  : 'Connectez Gmail pour envoyer votre candidature directement depuis BookJob.'}
+              </p>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => {
+                  const popup = window.open('/api/google/connect', 'bookjob-google-oauth', 'popup,width=520,height=680')
+                  if (!popup) setErr('Autorisez les fenêtres pop-up pour connecter Gmail.')
+                }}
+              >
+                {gmailStatus?.connected ? 'Renouveler Gmail' : 'Connecter Gmail'}
+              </button>
+            </div>
+          )}
           {!company?.id && (
             <label className="block text-[13px] font-semibold">Entreprise
               <input value={ent} onChange={updateField('ent', setEnt)} className={input} />

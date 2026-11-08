@@ -809,6 +809,95 @@ def apply(entreprise: str = Form(...), poste: str = Form(""), date_candidature: 
 
 
 @app.post("/api/tracking/{tid}/send")
+def send_application(
+    tid: str,
+    recipient: str = Form(...),
+    subject: str = Form(...),
+    body: str = Form(...),
+    cover_letter: str = Form(""),
+    offer_title: str = Form(""),
+    offer_url: str = Form(""),
+    offer_description: str = Form(""),
+    cover_letter_file: Optional[UploadFile] = File(None),
+):
+    email_status = gmail.status()
+    if not email_status.get("configured"):
+        raise HTTPException(503, "La connexion Google OAuth n'est pas configurée sur le serveur.")
+    if not email_status.get("connected"):
+        raise HTTPException(503, "Connecte ton compte Gmail avec Google avant l'envoi.")
+    if not email_status.get("send_authorized"):
+        raise HTTPException(503, "Reconnecte Gmail et autorise l'envoi de messages avant de continuer.")
+
+    recipient = recipient.strip()
+    subject = subject.strip()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", recipient):
+        raise HTTPException(400, "Adresse e-mail destinataire invalide")
+    if not subject or "\r" in subject or "\n" in subject:
+        raise HTTPException(400, "Objet d'e-mail invalide")
+    if len(body) > 20000 or len(cover_letter) > 20000 or len(offer_description) > 30000:
+        raise HTTPException(413, "Le message ou le texte de l'offre dépasse la taille autorisée.")
+    if len(offer_title) > 300 or len(offer_url) > 2000 or "\r" in offer_url or "\n" in offer_url:
+        raise HTTPException(400, "Le titre ou le lien de l'offre est invalide.")
+    if offer_url and not re.fullmatch(r"https?://[^\s]+", offer_url):
+        raise HTTPException(400, "Le lien de l'offre doit commencer par http:// ou https://.")
+    if not body.strip():
+        raise HTTPException(400, "Le message de candidature est obligatoire.")
+
+    with _EMAIL_LOCK:
+        d = S.load_tracking()
+        matches = d.index[d.ID == tid]
+        if len(matches) == 0:
+            raise HTTPException(404, "Candidature introuvable")
+        index = matches[0]
+        row = d.loc[index]
+        old_status = _check_statut(str(row["Statut"]))
+        if old_status not in C.STATUTS_NON_ENVOYES:
+            raise HTTPException(409, "Cette candidature n'est plus un brouillon et ne peut pas être envoyée à nouveau")
+        if not row["Fichier_CV"]:
+            raise HTTPException(400, "Ajoute un CV à la candidature avant l'envoi")
+
+        letter_filename = ""
+        if cover_letter_file is not None and cover_letter_file.filename:
+            letter_filename, _ = _save_upload(
+                cover_letter_file, C.user_path(C.CV_SENT_DIR), f"{tid}_lettre",
+            )
+        try:
+            message = _application_email_message(email_status["sender"], {
+                "recipient": recipient,
+                "subject": subject,
+                "body": body.strip(),
+                "cv_filename": row["Fichier_CV"],
+                "cover_letter": cover_letter.strip(),
+                "cover_letter_file": letter_filename,
+            })
+            gmail.send(message)
+        except gmail.GmailError as ex:
+            if letter_filename:
+                (C.user_path(C.CV_SENT_DIR) / letter_filename).unlink(missing_ok=True)
+            raise HTTPException(502, "La candidature n'a pas été envoyée. " + str(ex)) from ex
+        except HTTPException:
+            if letter_filename:
+                (C.user_path(C.CV_SENT_DIR) / letter_filename).unlink(missing_ok=True)
+            raise
+
+        sent_date = str(date.today())
+        d.loc[index, ["Email_contact", "Statut", "Date_candidature", "Date_relance", "Date_modification"]] = [
+            recipient, "Candidature envoyée", sent_date, S.default_relance(sent_date),
+            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        ]
+        S.save_tracking(d)
+        _record_status_change(
+            tid, old_status, "Candidature envoyée", "email_send",
+            f"Envoi Gmail confirmé pour {recipient}.",
+        )
+        return {
+            "ok": True,
+            "sent": True,
+            "message": f"La candidature a été envoyée à {recipient}.",
+        }
+
+
+@app.post("/api/tracking/{tid}/send-confirmation")
 def request_application_confirmation(
     tid: str,
     recipient: str = Form(...),

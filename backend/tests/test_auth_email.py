@@ -244,6 +244,7 @@ def _configure_application(monkeypatch, tmp_path, *, send=None):
     monkeypatch.setattr(C, "BOOKJOB_PUBLIC_URL", "http://testserver")
     monkeypatch.setattr(main.gmail, "status", lambda: {
         "configured": True, "connected": True, "draft_authorized": True,
+        "send_authorized": True,
         "sender": "sender@gmail.com",
     })
     drafts = {}
@@ -300,8 +301,53 @@ def _request_confirmation(client, *, include_cover_letter=True):
     }
     if include_cover_letter:
         form["cover_letter"] = "Madame, Monsieur,\nJe souhaite effectuer mon stage chez vous."
-    response = client.post("/api/tracking/EXT-TEST/send", data=form)
+    response = client.post("/api/tracking/EXT-TEST/send-confirmation", data=form)
     return response
+
+
+def _send_application(client, *, include_cover_letter=True):
+    form = {
+        "recipient": "recrutement@example.com",
+        "subject": "Candidature stage Data",
+        "body": "Bonjour, voici ma candidature.",
+        "offer_title": "Stage Data",
+        "offer_url": "https://example.com/jobs/stage-data",
+        "offer_description": "Nous recherchons des compétences Python et analyse de données.",
+    }
+    if include_cover_letter:
+        form["cover_letter"] = "Madame, Monsieur,\nJe souhaite effectuer mon stage chez vous."
+    return client.post("/api/tracking/EXT-TEST/send", data=form)
+
+
+def _configure_direct_send(monkeypatch, tmp_path, *, send=None):
+    cv_dir = tmp_path / "cvs"
+    cv_dir.mkdir()
+    (cv_dir / "application.pdf").write_bytes(b"%PDF-1.4 test")
+    row = {column: "" for column in C.COLS}
+    row.update(
+        ID="EXT-TEST",
+        Entreprise="Entreprise test",
+        Secteur="Informatique",
+        Poste_visé="Stage Data",
+        Email_contact="",
+        Statut="À envoyer",
+        Fichier_CV="application.pdf",
+    )
+    state = {"tracking": pd.DataFrame([row], columns=C.COLS), "events": [], "messages": []}
+    monkeypatch.setattr(C, "user_path", lambda path: path)
+    monkeypatch.setattr(C, "CV_SENT_DIR", cv_dir)
+    monkeypatch.setattr(main.S, "load_tracking", lambda: state["tracking"].copy(deep=True))
+    monkeypatch.setattr(main.S, "save_tracking", lambda updated: state.update(tracking=updated.copy(deep=True)))
+    monkeypatch.setattr(main.S, "default_relance", lambda _: "2026-10-21")
+    monkeypatch.setattr(main.gmail, "status", lambda: {
+        "configured": True, "connected": True, "send_authorized": True, "sender": "sender@gmail.com",
+    })
+    monkeypatch.setattr(main.gmail, "send", send or (lambda message: state["messages"].append(message)))
+    monkeypatch.setattr(
+        main, "_record_status_change",
+        lambda *event: state["events"].append(event),
+    )
+    return state
 
 
 def test_application_email_message_allows_no_cover_letter(monkeypatch, tmp_path):
@@ -334,6 +380,49 @@ def test_application_upload_accepts_only_pdf(tmp_path):
     with pytest.raises(HTTPException) as exc_info:
         main._save_upload(word_upload, tmp_path, "candidate_word_cv")
     assert exc_info.value.detail == "Format non pris en charge : PDF uniquement"
+
+
+def test_application_is_sent_directly_and_tracking_updates_only_after_gmail_success(monkeypatch, tmp_path):
+    state = _configure_direct_send(monkeypatch, tmp_path)
+
+    response = main.send_application(
+        "EXT-TEST", "recrutement@example.com", "Candidature stage Data",
+        "Bonjour, voici ma candidature.", "Madame, Monsieur,\nJe souhaite effectuer mon stage chez vous.",
+        "Stage Data", "https://example.com/jobs/stage-data",
+        "Nous recherchons des compétences Python et analyse de données.", None,
+    )
+
+    assert response == {
+        "ok": True, "sent": True,
+        "message": "La candidature a été envoyée à recrutement@example.com.",
+    }
+    assert len(state["messages"]) == 1
+    application = state["messages"][0]
+    assert application["To"] == "recrutement@example.com"
+    assert application["Subject"] == "Candidature stage Data"
+    assert [item.get_filename() for item in application.iter_attachments()] == [
+        "application.pdf", "lettre_motivation.txt",
+    ]
+    assert state["tracking"].iloc[0]["Statut"] == "Candidature envoyée"
+    assert state["tracking"].iloc[0]["Email_contact"] == "recrutement@example.com"
+    assert state["events"][0][1:3] == ("À envoyer", "Candidature envoyée")
+
+
+def test_application_send_failure_is_not_reported_as_sent(monkeypatch, tmp_path):
+    def failed_send(_message):
+        raise main.gmail.GmailError("Google a refusé l'envoi.")
+
+    state = _configure_direct_send(monkeypatch, tmp_path, send=failed_send)
+
+    with pytest.raises(HTTPException) as exc_info:
+        main.send_application(
+            "EXT-TEST", "recrutement@example.com", "Candidature stage Data",
+            "Bonjour, voici ma candidature.", "", "Stage Data", "", "", None,
+        )
+
+    assert exc_info.value.status_code == 502
+    assert "La candidature n'a pas été envoyée" in exc_info.value.detail
+    assert state["tracking"].iloc[0]["Statut"] == "À envoyer"
 
 
 def test_preview_email_requires_separate_one_time_confirmation(monkeypatch, tmp_path):
@@ -461,7 +550,7 @@ def test_uploaded_cover_letter_is_attached_to_preview_and_final_email(monkeypatc
         "offer_description": "Python et analyse de données.",
     }
     response = client.post(
-        "/api/tracking/EXT-TEST/send",
+        "/api/tracking/EXT-TEST/send-confirmation",
         data=form,
         files={"cover_letter_file": ("lettre.pdf", b"%PDF-1.4 letter", "application/pdf")},
     )
