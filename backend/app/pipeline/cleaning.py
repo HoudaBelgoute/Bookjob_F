@@ -40,11 +40,12 @@ SECTOR_RULES = [
     ("Hôtellerie", ["hotel", "riad", "tourisme", "resort"]),
     ("Conseil", ["conseil", "consulting", "bureau d'etudes", "cabinet"]),
     ("Digital / Marketing", ["marketing", "communication", "publicite", "evenementiel"]),
+    ("Formation", ["formation", "educational", "university", "college", "language school"]),
     ("IT / Dev / Data", ["informatique", "developpement", "web", "logiciel", "data", "digital", "startup",
                          "numerique"]),
 ]
 SECTOR_POINTS = {"IT / Dev / Data": 50, "Digital / Marketing": 45, "Conseil": 40, "Banque / Finance": 40,
-                 "Centre d'appel / BPO": 30, "Hôtellerie": 25}
+                 "Centre d'appel / BPO": 30, "Formation": 30, "Hôtellerie": 25}
 OTHER_SECTOR = "Autre"
 BAYES_WEIGHT = 20       # poids de la moyenne globale dans la note lissée
 VISIBILITY_CAP = 2000   # au-delà, le nombre d'avis n'apporte plus de points (outliers hôtels / banques)
@@ -145,7 +146,7 @@ def detect_quartier(address) -> str:
 
 def normalize_phone(phone) -> tuple[str | None, bool]:
     """Renvoie (téléphone, est_standard). Format standard marocain → +212XXXXXXXXX."""
-    if not phone:
+    if phone is None or pd.isna(phone):
         return None, True
     digits = re.sub(r"\D", "", str(phone))
     if re.fullmatch(r"0[5-8]\d{8}", digits):
@@ -296,7 +297,11 @@ def clean(raw: pd.DataFrame, previous_ids: dict[str, str] | None = None) -> Clea
     df["Priorite"] = df["Score"].map(priority)
 
     df = df.sort_values(["Score", "Entreprise"], ascending=[False, True], kind="mergesort").reset_index(drop=True)
-    df["ID"] = _assign_ids(df["cid"], previous_ids or {})
+    id_keys = df["cid"].where(
+        df["cid"].notna(),
+        "nom:" + df["Entreprise"].map(norm) + "|" + df["Adresse"].map(norm),
+    )
+    df["ID"] = _assign_ids(id_keys, previous_ids or {})
 
     excluded_df = (pd.concat(excluded, ignore_index=True)[EXCLUDED_COLS] if excluded
                    else pd.DataFrame(columns=EXCLUDED_COLS))
@@ -318,8 +323,11 @@ def _assign_ids(cids: pd.Series, previous: dict[str, str]) -> list[str]:
 
 
 def previous_ids_from(clean_df: pd.DataFrame) -> dict[str, str]:
-    """Reconstitue la table cid → ID depuis un fichier nettoyé existant (via Lien_Maps, sans perte de précision)."""
-    if clean_df is None or clean_df.empty or "ID" not in clean_df or "Lien_Maps" not in clean_df:
+    """Reconstitue les clés stables (CID Google ou nom + adresse) depuis un fichier nettoyé."""
+    if (clean_df is None or clean_df.empty or "ID" not in clean_df or "Lien_Maps" not in clean_df
+            or "Entreprise" not in clean_df or "Adresse" not in clean_df):
         return {}
-    pairs = zip(clean_df["Lien_Maps"].map(extract_cid), clean_df["ID"])
-    return {cid: str(i) for cid, i in pairs if cid}
+    cids = clean_df["Lien_Maps"].map(extract_cid)
+    fallback = "nom:" + clean_df["Entreprise"].map(norm) + "|" + clean_df["Adresse"].map(norm)
+    keys = cids.where(cids.notna(), fallback)
+    return {key: str(i) for key, i in zip(keys, clean_df["ID"]) if key}

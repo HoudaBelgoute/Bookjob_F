@@ -6,7 +6,10 @@ import pytest
 
 from app.pipeline import cleaning as K
 from app.pipeline.run import run_pipeline
-from app.pipeline.sources import RAW_COLS, ExcelSource, GooglePlacesSource, SourceResult, collect_all
+from app.pipeline.sources import (
+    RAW_COLS, ExcelSource, GooglePlacesSource, OpenStreetMapSource, PublicEmploymentSource,
+    SourceResult, collect_all,
+)
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 MAPS = "https://maps.google.com/?cid={}&g_mp=x"
@@ -89,6 +92,26 @@ def test_clean_merges_duplicates_excludes_and_keeps_ids_stable():
     assert report["Téléphones non standard (format différent de 0X XX XX XX XX)"] == 1
 
 
+def test_clean_keeps_ids_stable_for_sources_without_google_cid():
+    raw = pd.DataFrame([{
+        "Entreprise": "Centre Alpha",
+        "Categorie": "Educational Institution",
+        "Adresse": "Guéliz, Marrakech, Morocco",
+        "Note": None,
+        "Nb_avis": None,
+        "Site_web": "https://alpha.ma",
+        "Telephone": None,
+        "Lien_Maps": "https://www.openstreetmap.org/node/123",
+        "Requete": "centre de formation Marrakech",
+    }], columns=RAW_COLS)
+    first = K.clean(raw).clean
+    previous = K.previous_ids_from(first)
+    second = K.clean(raw, previous_ids=previous).clean
+
+    assert first.iloc[0]["Secteur"] == "Formation"
+    assert second.iloc[0]["ID"] == first.iloc[0]["ID"]
+
+
 def test_failing_source_does_not_stop_the_others():
     class Broken:
         name = "broken"
@@ -136,6 +159,106 @@ def test_google_places_connector_maps_fields_and_handles_missing_key():
     assert session.calls[0][1]["X-Goog-Api-Key"] == "test-key"
 
 
+def test_openstreetmap_connector_maps_organizations_without_an_api_key():
+    class Response:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"elements": [
+                {"type": "node", "id": 123, "tags": {
+                    "name": "Centre Alpha", "office": "educational_institution",
+                    "addr:street": "Avenue Mohammed V", "addr:city": "Marrakech",
+                    "website": "https://alpha.ma", "phone": "+212 5 24 00 00 00",
+                }},
+                {"type": "way", "id": 456, "tags": {"office": "company"}},
+            ]}
+
+    class Session:
+        calls = []
+
+        def post(self, url, data, timeout, headers):
+            self.calls.append((url, data, timeout, headers))
+            return Response()
+
+    session = Session()
+    result = OpenStreetMapSource(session=session).collect()
+
+    assert len(result.rows) == 1 and result.errors == []
+    row = result.rows.iloc[0]
+    assert row["Entreprise"] == "Centre Alpha"
+    assert row["Categorie"] == "Educational Institution"
+    assert row["Adresse"] == "Avenue Mohammed V, Marrakech, Morocco"
+    assert row["Lien_Maps"] == "https://www.openstreetmap.org/node/123"
+    assert "centre de formation" in row["Requete"]
+    assert "User-Agent" in session.calls[0][3]
+
+
+def test_openstreetmap_retries_temporary_overpass_capacity_errors(monkeypatch):
+    class Response:
+        text = ""
+
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+        def json(self):
+            return {"elements": [{
+                "type": "node", "id": 789,
+                "tags": {"name": "Centre Beta", "office": "educational_institution"},
+            }]}
+
+    class Session:
+        calls = 0
+
+        def post(self, url, data, timeout, headers):
+            self.calls += 1
+            return Response(502 if self.calls == 1 else 200)
+
+    monkeypatch.setattr("app.pipeline.sources.time.sleep", lambda _: None)
+    session = Session()
+    result = OpenStreetMapSource(session=session).collect()
+
+    assert session.calls == 2 and result.errors == []
+    assert result.rows.iloc[0]["Entreprise"] == "Centre Beta"
+
+
+def test_public_employment_connector_keeps_only_open_marrakech_announcements():
+    class Response:
+        status_code = 200
+        text = """
+        <div class="s-item"><a href="/fr/concours/details/stage-1">
+          <h2 class="card-title">Stage développeur - Marrakech</h2>
+          <div class="card-text">Entreprise Alpha</div><div class="card-type">Annonce</div>
+          <div class="card-footer">Limite de dépôt : 20 Décembre 2026</div>
+        </a></div>
+        <div class="s-item"><a href="/fr/concours/details/expired">
+          <h2 class="card-title">Technicien Marrakech</h2>
+          <div class="card-text">Administration</div><div class="card-type">Annonce</div>
+          <div class="card-footer">Limite de dépôt : 1 Janvier 2026</div>
+        </a></div>
+        <div class="s-item"><a href="/fr/concours/details/result">
+          <h2 class="card-title">Concours Marrakech</h2>
+          <div class="card-text">Administration</div><div class="card-type">Résultat</div>
+          <div class="card-footer">Limite de dépôt : 20 Décembre 2026</div>
+        </a></div>
+        """
+
+    class Session:
+        def get(self, url, params, timeout, headers):
+            assert params == {"key_word": "Marrakech", "page": 1}
+            return Response()
+
+    source = PublicEmploymentSource(session=Session(), max_pages=1, today=pd.Timestamp("2026-11-08").date())
+    result = source.collect()
+
+    assert result.errors == [] and len(result.rows) == 1
+    row = result.rows.iloc[0]
+    assert row["Intitule"] == "Stage développeur - Marrakech"
+    assert row["Employeur"] == "Entreprise Alpha"
+    assert row["Type"] == "Stage" and row["Date_limite"] == "2026-12-20"
+    assert row["Lien"].endswith("/fr/concours/details/stage-1")
+
+
 def test_run_pipeline_writes_before_after_excel_and_history(tmp_path):
     raw_path = tmp_path / "brut.xlsx"
     _raw().to_excel(raw_path, index=False)
@@ -146,8 +269,22 @@ def test_run_pipeline_writes_before_after_excel_and_history(tmp_path):
 
     assert run["statut"] == "partiel" and run["lignes_brutes"] == 6 and run["lignes_nettoyees"] == 2
     sheets = pd.read_excel(out, sheet_name=None)
-    assert {"Données nettoyées", "Lignes exclues", "Rapport nettoyage", "Dictionnaire", "Journal collecte"} <= set(sheets)
+    assert {"Données nettoyées", "Lignes exclues", "Rapport nettoyage", "Dictionnaire", "Journal collecte",
+            "Offres publiques actives", "Établissements formation"} <= set(sheets)
     assert len(json.loads(runs.read_text(encoding="utf-8"))) == 1
+
+
+def test_run_pipeline_preserves_other_sheets_when_updating_app_workbook(tmp_path):
+    out = tmp_path / "donnees_nettoyees.xlsx"
+    with pd.ExcelWriter(out, engine="openpyxl") as writer:
+        pd.DataFrame({"Suivi": ["donnée utilisateur"]}).to_excel(writer, index=False, sheet_name="Suivi")
+
+    run = run_pipeline([], out, runs_file=tmp_path / "runs.json")
+    sheets = pd.read_excel(out, sheet_name=None)
+
+    assert sheets["Suivi"].iloc[0, 0] == "donnée utilisateur"
+    assert "Données nettoyées" in sheets
+    assert run["offres_actives"] == 0 and run["formations_collectees"] == 0
 
 
 @pytest.mark.skipif(not (DATA / "donnees_brutes_places.xlsx").exists(), reason="export brut absent")

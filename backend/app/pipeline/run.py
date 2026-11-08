@@ -3,6 +3,8 @@
 Exemples (depuis ``backend``) :
   python -m app.pipeline.run --source excel                      # re-nettoie donnees_brutes_places.xlsx
   python -m app.pipeline.run --source places                     # collecte Google Places (GOOGLE_API_KEY)
+  python -m app.pipeline.run --source osm                        # collecte OpenStreetMap (sans clé API)
+  python -m app.pipeline.run --source jobs                       # annonces publiques encore ouvertes (sans clé)
   python -m app.pipeline.run --source places --queries "agence web Marrakech" "startup Marrakech"
 
 Le fichier utilisé par l'application (``donnees_nettoyees.xlsx``) n'est jamais écrasé : la sortie va dans
@@ -20,7 +22,10 @@ import pandas as pd
 
 from .. import config as C
 from .cleaning import clean, previous_ids_from
-from .sources import ExcelSource, GooglePlacesSource, collect_all
+from .sources import (
+    OPPORTUNITY_COLS, ExcelSource, GooglePlacesSource, OpenStreetMapSource, PublicEmploymentSource,
+    collect_all,
+)
 
 RAW_DEFAULT = C.DATA_DIR / "donnees_brutes_places.xlsx"
 OUT_DEFAULT = C.DATA_DIR / "donnees_nettoyees_pipeline.xlsx"
@@ -40,9 +45,35 @@ def _record_run(run: dict, path: Path) -> None:
 
 
 def run_pipeline(sources, out_path: Path, raw_out: Path | None = None, reference: Path | None = None,
-                 runs_file: Path = RUNS_FILE) -> dict:
+                 runs_file: Path = RUNS_FILE, opportunity_sources=None) -> dict:
     started = datetime.now(timezone.utc)
     raw, log = collect_all(sources)
+    opportunities, training_log = [], []
+    for source in opportunity_sources or []:
+        source_started = datetime.now(timezone.utc)
+        try:
+            result = source.collect()
+        except Exception as ex:
+            result = None
+            errors = [str(ex)]
+            name = getattr(source, "name", "opportunites")
+            rows = pd.DataFrame(columns=OPPORTUNITY_COLS)
+        else:
+            errors = result.errors
+            name = result.name
+            rows = result.rows
+        if not rows.empty:
+            opportunities.append(rows)
+        training_log.append({
+            "source": name,
+            "lignes": int(len(rows)),
+            "statut": "succès" if not errors else ("partiel" if len(rows) else "échec"),
+            "erreurs": " ; ".join(errors),
+            "duree_s": round((datetime.now(timezone.utc) - source_started).total_seconds(), 2),
+        })
+    log.extend(training_log)
+    opportunity_rows = (pd.concat(opportunities, ignore_index=True).drop_duplicates(subset=["Lien"])
+                        if opportunities else pd.DataFrame(columns=OPPORTUNITY_COLS))
     if raw_out is not None and not raw.empty:
         raw.to_excel(raw_out, index=False, sheet_name="Données brutes")
 
@@ -51,13 +82,21 @@ def run_pipeline(sources, out_path: Path, raw_out: Path | None = None, reference
         previous = previous_ids_from(pd.read_excel(reference, sheet_name="Données nettoyées"))
     result = clean(raw, previous)
 
-    with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+    writer_options = {"engine": "openpyxl"}
+    if Path(out_path).exists():
+        writer_options.update(mode="a", if_sheet_exists="replace")
+    with pd.ExcelWriter(out_path, **writer_options) as writer:
         result.clean.to_excel(writer, index=False, sheet_name="Données nettoyées")
         result.excluded.to_excel(writer, index=False, sheet_name="Lignes exclues")
         result.report.to_excel(writer, index=False, sheet_name="Rapport nettoyage")
         result.dictionary().to_excel(writer, index=False, sheet_name="Dictionnaire")
+        opportunity_rows.to_excel(writer, index=False, sheet_name="Offres publiques actives")
+        result.clean[result.clean["Secteur"].eq("Formation")].to_excel(
+            writer, index=False, sheet_name="Établissements formation"
+        )
         pd.DataFrame(log).to_excel(writer, index=False, sheet_name="Journal collecte")
 
+    has_data = not raw.empty or not opportunity_rows.empty
     run = {
         "debut": started.isoformat(timespec="seconds"),
         "fin": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -65,8 +104,10 @@ def run_pipeline(sources, out_path: Path, raw_out: Path | None = None, reference
         "lignes_brutes": int(len(raw)),
         "lignes_nettoyees": int(len(result.clean)),
         "lignes_exclues": int(len(result.excluded)),
+        "offres_actives": int(len(opportunity_rows)),
+        "formations_collectees": int(result.clean["Secteur"].eq("Formation").sum()),
         "sortie": Path(out_path).name,
-        "statut": "échec" if raw.empty else ("partiel" if any(s["erreurs"] for s in log) else "succès"),
+        "statut": "échec" if not has_data else ("partiel" if any(s["erreurs"] for s in log) else "succès"),
     }
     _record_run(run, runs_file)
     return run
@@ -74,26 +115,34 @@ def run_pipeline(sources, out_path: Path, raw_out: Path | None = None, reference
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Pipeline de collecte et de nettoyage BookJob")
-    parser.add_argument("--source", choices=["excel", "places"], action="append",
+    parser.add_argument("--source", choices=["excel", "places", "osm", "jobs"], action="append",
                         help="Source(s) à utiliser (répétable). Défaut : excel")
     parser.add_argument("--raw", type=Path, default=RAW_DEFAULT, help="Excel brut à importer (source excel)")
     parser.add_argument("--queries", nargs="*", help="Requêtes Google Places (source places)")
     parser.add_argument("--out", type=Path, default=OUT_DEFAULT, help="Excel nettoyé produit")
     args = parser.parse_args(argv)
 
-    sources, raw_out = [], None
+    sources, opportunity_sources, raw_out = [], [], None
     for name in args.source or ["excel"]:
         if name == "excel":
             sources.append(ExcelSource(args.raw))
-        else:
+        elif name == "places":
             sources.append(GooglePlacesSource(C.GOOGLE_API_KEY, args.queries))
             raw_out = C.DATA_DIR / f"donnees_brutes_collecte_{datetime.now():%Y%m%d_%H%M}.xlsx"
+        elif name == "osm":
+            sources.append(OpenStreetMapSource())
+            raw_out = C.DATA_DIR / f"donnees_brutes_collecte_{datetime.now():%Y%m%d_%H%M}.xlsx"
+        else:
+            opportunity_sources.append(PublicEmploymentSource())
 
-    run = run_pipeline(sources, args.out, raw_out=raw_out, reference=C.XLSX)
+    run = run_pipeline(sources, args.out, raw_out=raw_out, reference=C.XLSX,
+                       opportunity_sources=opportunity_sources)
     for s in run["sources"]:
         print(f"[{s['statut']}] {s['source']} : {s['lignes']} lignes {('— ' + s['erreurs']) if s['erreurs'] else ''}")
     print(f"Brutes : {run['lignes_brutes']} · nettoyées : {run['lignes_nettoyees']} · "
           f"exclues : {run['lignes_exclues']} → {args.out}")
+    print(f"Offres publiques actives : {run['offres_actives']} · "
+          f"établissements de formation : {run['formations_collectees']}")
     return 0 if run["statut"] != "échec" else 1
 
 

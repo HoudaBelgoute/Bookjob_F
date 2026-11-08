@@ -42,12 +42,21 @@ Le code se trouve dans `backend/app/pipeline/` (`sources.py`, `cleaning.py`, `ru
 cd backend
 python -m app.pipeline.run --source excel                  # rejoue le nettoyage sur data/donnees_brutes_places.xlsx
 python -m app.pipeline.run --source places                 # nouvelle collecte Google Places API (New), requiert GOOGLE_API_KEY
+python -m app.pipeline.run --source osm                    # entreprises, recruteurs et formations (gratuit, sans clé)
+python -m app.pipeline.run --source jobs                   # annonces publiques encore ouvertes à Marrakech (sans clé)
 python -m app.pipeline.run --source places --source excel  # combine plusieurs sources
+python -m app.pipeline.run --source osm --source excel     # enrichit l'export existant avec OpenStreetMap
+python -m app.pipeline.run --source jobs --source osm --source excel --out data/donnees_nettoyees.xlsx
 ```
 
 - Données brutes (avant nettoyage) : `backend/data/donnees_brutes_places.xlsx` ; chaque nouvelle collecte Places est enregistrée dans `donnees_brutes_collecte_AAAAMMJJ_HHMM.xlsx`.
-- Sortie : `backend/data/donnees_nettoyees_pipeline.xlsx` (feuilles « Données nettoyées », « Lignes exclues », « Rapport nettoyage », « Dictionnaire », « Journal collecte »). Le fichier de référence `donnees_nettoyees.xlsx` utilisé par l'application n'est jamais écrasé ; les identifiants `MRK-###` existants sont conservés.
+- OpenStreetMap ajoute les entreprises, agences de recrutement et établissements d'enseignement/formation cartographiés à Marrakech. Cette source gratuite ne nécessite aucune clé API.
+- La source `jobs` interroge le portail officiel Emploi Public, filtre les annonces avec date limite encore valide, et ajoute les offres retenues dans la feuille « Offres publiques actives ». Le nombre d'offres et d'établissements de formation est indiqué dans le résumé d'exécution.
+- La source Google Places comprend davantage de secteurs et de recherches de centres de formation, mais reste facultative et peut nécessiter un compte Google Cloud avec facturation activée.
+- Sortie par défaut : `backend/data/donnees_nettoyees_pipeline.xlsx`. Pour mettre à jour le classeur de l'application, passe `--out data/donnees_nettoyees.xlsx` depuis `backend`; les autres feuilles utilisateur (ex. « Suivi ») sont préservées et les identifiants `MRK-###` existants sont conservés.
 - Une source en échec n'arrête pas les autres : le journal indique succès, partiel ou échec par source, et l'historique des exécutions est conservé dans `data/pipeline_runs.json`.
+- Les annonces récoltées sont les concours publics actifs de Marrakech; les offres privées et les stages ne sont disponibles que si un fournisseur autorise leur collecte ou propose une API/flux public.
+- Rekrute n'est pas récupéré automatiquement car son `robots.txt` interdit l'accès automatisé à ses pages d'offres; Emploi.ma bloque les requêtes de collecte directe. Le pipeline ne contourne ni ces restrictions ni leurs protections.
 - La page Statistiques affiche la qualité des données (complétude, doublons, lignes exclues, problèmes et traitements, exécutions du pipeline) via `GET /api/data-quality`.
 - LinkedIn n'est pas collecté automatiquement (conditions d'utilisation) : les offres trouvées sur LinkedIn s'ajoutent manuellement au suivi avec la source « LinkedIn ».
 
