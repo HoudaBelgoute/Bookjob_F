@@ -227,7 +227,7 @@ def _access_token(force_refresh: bool = False) -> str:
     return access_token
 
 
-def send(message: EmailMessage) -> None:
+def send(message: EmailMessage) -> str:
     if not status().get("send_authorized"):
         raise GmailError("Reconnecte Gmail et autorise l'envoi de messages pour envoyer les relances.")
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
@@ -243,7 +243,21 @@ def send(message: EmailMessage) -> None:
         except requests.RequestException as ex:
             raise GmailError("Google Gmail n'est pas joignable. L'e-mail n'a pas été envoyé.") from ex
         if response.ok:
-            return
+            try:
+                result = response.json()
+            except (ValueError, AttributeError) as ex:
+                raise GmailError(
+                    "Gmail a répondu, mais BookJob ne peut pas vérifier l'envoi. "
+                    "Vérifie le dossier Envoyés avant de réessayer."
+                ) from ex
+            message_id = result.get("id") if isinstance(result, dict) else None
+            labels = result.get("labelIds", []) if isinstance(result, dict) else []
+            if not isinstance(message_id, str) or not message_id or "SENT" not in labels:
+                raise GmailError(
+                    "Gmail a répondu sans confirmer le message dans Envoyés. "
+                    "Vérifie le dossier Envoyés avant de réessayer."
+                )
+            return message_id
         if response.status_code == 401 and attempt == 0:
             access_token = _access_token(force_refresh=True)
             continue

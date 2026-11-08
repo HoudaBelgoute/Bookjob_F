@@ -870,7 +870,7 @@ def send_application(
                 "cover_letter": cover_letter.strip(),
                 "cover_letter_file": letter_filename,
             })
-            gmail.send(message)
+            gmail_message_id = gmail.send(message)
         except gmail.GmailError as ex:
             if letter_filename:
                 (C.user_path(C.CV_SENT_DIR) / letter_filename).unlink(missing_ok=True)
@@ -893,6 +893,9 @@ def send_application(
         return {
             "ok": True,
             "sent": True,
+            "message_id": gmail_message_id,
+            "sender": email_status["sender"],
+            "recipient": recipient,
             "message": f"La candidature a été envoyée à {recipient}.",
         }
 

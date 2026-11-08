@@ -342,7 +342,13 @@ def _configure_direct_send(monkeypatch, tmp_path, *, send=None):
     monkeypatch.setattr(main.gmail, "status", lambda: {
         "configured": True, "connected": True, "send_authorized": True, "sender": "sender@gmail.com",
     })
-    monkeypatch.setattr(main.gmail, "send", send or (lambda message: state["messages"].append(message)))
+    def send_message(message):
+        state["messages"].append(message)
+        if send:
+            return send(message)
+        return "sent-message-123"
+
+    monkeypatch.setattr(main.gmail, "send", send_message)
     monkeypatch.setattr(
         main, "_record_status_change",
         lambda *event: state["events"].append(event),
@@ -394,6 +400,9 @@ def test_application_is_sent_directly_and_tracking_updates_only_after_gmail_succ
 
     assert response == {
         "ok": True, "sent": True,
+        "message_id": "sent-message-123",
+        "sender": "sender@gmail.com",
+        "recipient": "recrutement@example.com",
         "message": "La candidature a été envoyée à recrutement@example.com.",
     }
     assert len(state["messages"]) == 1

@@ -80,7 +80,7 @@ def test_send_refreshes_expired_token_and_posts_mime_message_to_gmail(monkeypatc
         calls.append((url, kwargs))
         if url == gmail.TOKEN_URL:
             return FakeResponse(payload={"access_token": "fresh-token", "expires_in": 3600})
-        return FakeResponse()
+        return FakeResponse(payload={"id": "sent-message-123", "labelIds": ["SENT"]})
 
     monkeypatch.setattr(gmail.requests, "post", post)
     message = EmailMessage()
@@ -89,8 +89,9 @@ def test_send_refreshes_expired_token_and_posts_mime_message_to_gmail(monkeypatc
     message["Subject"] = "Application"
     message.set_content("Please find my CV attached.")
 
-    gmail.send(message)
+    message_id = gmail.send(message)
 
+    assert message_id == "sent-message-123"
     assert calls[0][0] == gmail.TOKEN_URL
     assert calls[1][0] == gmail.SEND_URL
     assert calls[1][1]["headers"]["Authorization"] == "Bearer fresh-token"
@@ -99,6 +100,31 @@ def test_send_refreshes_expired_token_and_posts_mime_message_to_gmail(monkeypatc
     decoded = message_from_bytes(base64.urlsafe_b64decode(raw))
     assert decoded["To"] == "recruitment@example.com"
     assert decoded["Subject"] == "Application"
+
+
+def test_send_rejects_success_response_without_gmail_message_id(monkeypatch, tmp_path):
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_REDIRECT_URI", "https://bookjob.example/api/google/callback")
+    monkeypatch.setattr(C, "GOOGLE_TOKEN_FILE", tmp_path / "oauth.json")
+    C.GOOGLE_TOKEN_FILE.write_text(json.dumps({
+        "access_token": "access-token", "refresh_token": "refresh-token",
+        "expires_at": time.time() + 3600, "email": "person@gmail.com",
+        "scopes": [gmail.GMAIL_SEND_SCOPE],
+    }), encoding="utf-8")
+    monkeypatch.setattr(gmail.requests, "post", lambda *_args, **_kwargs: FakeResponse())
+    message = EmailMessage()
+    message["From"] = "person@gmail.com"
+    message["To"] = "recruitment@example.com"
+    message["Subject"] = "Application"
+    message.set_content("Please find my CV attached.")
+
+    try:
+        gmail.send(message)
+    except gmail.GmailError as error:
+        assert "Vérifie le dossier Envoyés avant de réessayer" in str(error)
+    else:
+        raise AssertionError("Expected missing Gmail message id to be rejected")
 
 
 def test_gmail_draft_is_created_and_sent_only_after_request(monkeypatch, tmp_path):

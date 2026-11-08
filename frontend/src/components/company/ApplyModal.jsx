@@ -38,6 +38,7 @@ export default function ApplyModal({
   const [fieldErrors, setFieldErrors] = useState({})
   const [result, setResult] = useState(null)
   const [sent, setSent] = useState(false)
+  const [sentDetails, setSentDetails] = useState(null)
   const [confirmationRequested, setConfirmationRequested] = useState(false)
   const [consent, setConsent] = useState(false)
   const [coverLetterFile, setCoverLetterFile] = useState(null)
@@ -168,7 +169,8 @@ export default function ApplyModal({
       form.append('offer_url', offerUrl.trim())
       form.append('offer_description', '')
       if (coverLetterFile) form.append('cover_letter_file', coverLetterFile)
-      await api.sendApplication(application.id, form)
+      const sentMessage = await api.sendApplication(application.id, form)
+      setSentDetails(sentMessage)
       setSent(true)
       setConfirmationRequested(true)
       notify(`Votre candidature a été envoyée à ${recipient.trim()}.`)
@@ -214,7 +216,8 @@ export default function ApplyModal({
       form.append('offer_url', offerUrl.trim())
       form.append('offer_description', '')
       if (coverLetterFile) form.append('cover_letter_file', coverLetterFile)
-      await api.sendApplication(result.id, form)
+      const sentMessage = await api.sendApplication(result.id, form)
+      setSentDetails(sentMessage)
       setSent(true)
       setConfirmationRequested(true)
       notify(`Votre candidature a été envoyée à ${recipient.trim()}.`)
@@ -254,7 +257,20 @@ export default function ApplyModal({
           {busy && !confirmationRequested ? (
             <p role="status" className="text-[14px] text-muted">Envoi de votre candidature en cours…</p>
           ) : sent ? (
-            <p role="status" className="rounded-xl border border-success/30 bg-success-soft p-4 text-success">Votre candidature a bien été envoyée.</p>
+            <div role="status" className="space-y-2 rounded-xl border border-success/30 bg-success-soft p-4 text-success">
+              <p className="font-semibold">Gmail a confirmé l’envoi à {sentDetails?.recipient || recipient}.</p>
+              <p className="text-[12px]">Compte expéditeur : {sentDetails?.sender || gmailStatus?.sender}.</p>
+              {sentDetails?.message_id && (
+                <a
+                  className="inline-block underline"
+                  href={`https://mail.google.com/mail/u/0/#sent/${encodeURIComponent(sentDetails.message_id)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Ouvrir le message dans Gmail · Envoyés
+                </a>
+              )}
+            </div>
           ) : confirmationRequested ? (
             <div className="space-y-3 rounded-xl border border-success/30 bg-success-soft p-4 text-[13px]">
               <p className="font-semibold text-success">Votre message est prêt dans WhatsApp.</p>
