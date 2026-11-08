@@ -192,13 +192,13 @@ class RegisterIn(LoginIn):
 @app.get("/api/auth/status")
 def auth_status(request: Request):
     user = accounts.resolve_session(request.cookies.get(C.SESSION_COOKIE_NAME, ""))
-    user_count = accounts.user_count()
+    registration_key_required = bool(C.REGISTRATION_KEY) and accounts.user_count() > 0
     return {
         "required": True,
         "authenticated": bool(user),
         "user": user,
         "registration_open": True,
-        "registration_key_required": bool(C.REGISTRATION_KEY) and user_count > 0,
+        "registration_key_required": registration_key_required,
         "google_login": google_login.configured(),
     }
 

@@ -35,15 +35,21 @@ def _get_pool() -> ConnectionPool:
             if _pool is None:
                 pool = ConnectionPool(
                     _database_url(),
-                    min_size=int(os.getenv("DB_POOL_MIN", "1")),
-                    max_size=int(os.getenv("DB_POOL_MAX", "4")),
+                    min_size=int(os.getenv("DB_POOL_MIN", "0")),
+                    max_size=int(os.getenv("DB_POOL_MAX", "1")),
+                    timeout=float(os.getenv("DB_POOL_TIMEOUT", "10")),
                     max_idle=60,
+                    num_workers=1,
                     # prepare_threshold=None : obligatoire avec le Transaction pooler (pgbouncer/supavisor)
-                    kwargs={"row_factory": dict_row, "prepare_threshold": None},
+                    kwargs={
+                        "row_factory": dict_row,
+                        "prepare_threshold": None,
+                        "connect_timeout": 5,
+                    },
                     check=ConnectionPool.check_connection,
                     open=False,
                 )
-                pool.open(wait=True, timeout=30)
+                pool.open(wait=False)
                 _pool = pool
     return _pool
 
