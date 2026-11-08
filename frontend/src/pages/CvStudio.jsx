@@ -1,10 +1,11 @@
 import clsx from 'clsx'
 import { Download, Mail, Printer, Sparkles, Trash2, Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, libCvUrl } from '../api'
 import { fmtDate, mdToHtml } from '../data/data'
 import { useStore } from '../store/useStore'
+import { getMissingCvProfileFields } from '../utils/cvProfileRequirements'
 
 const TEMPLATES = {
   Classique: 'font-family:Georgia,serif;color:#111',
@@ -36,7 +37,7 @@ function download(name, text) {
 }
 
 export default function CvStudio() {
-  const { cvs, uploadCv, mainCv, removeCv, allCompanies, meta, profile, completion, tracking, notify } = useStore()
+  const { cvs, uploadCv, mainCv, removeCv, allCompanies, meta, profile, tracking, notify } = useStore()
   const [params] = useSearchParams()
   const [tab, setTab] = useState(params.get('company') ? 'gen' : 'mine')
   const fileRef = useRef(null)
@@ -88,14 +89,14 @@ export default function CvStudio() {
       )}
 
       {tab !== 'mine' && (
-        <Generator key={tab} mode={tab} presetCompany={params.get('company')} companies={allCompanies} meta={meta} profile={profile} completion={completion} />
+        <Generator key={tab} mode={tab} presetCompany={params.get('company')} companies={allCompanies} meta={meta} profile={profile} />
       )}
     </div>
   )
 }
 
-function Generator({ mode, presetCompany, companies, meta, profile, completion }) {
-  const { tracking, notify } = useStore()
+function Generator({ mode, presetCompany, companies, meta, profile }) {
+  const { tracking } = useStore()
   const [cid, setCid] = useState(presetCompany || '')
   const [poste, setPoste] = useState(profile.titre || '')
   const [offre, setOffre] = useState('')
@@ -110,6 +111,7 @@ function Generator({ mode, presetCompany, companies, meta, profile, completion }
   const [used, setUsed] = useState('')
   const company = companies.find((c) => c.id === cid)
   const track = tracking.find((t) => t.id === cid)
+  const missingProfileFields = mode === 'gen' ? getMissingCvProfileFields(profile) : []
   const [q, setQ] = useState('')
   const list = useMemo(() => companies.filter((c) => c.short.toLowerCase().includes(q.toLowerCase())).slice(0, 80), [companies, q])
 
@@ -119,6 +121,9 @@ function Generator({ mode, presetCompany, companies, meta, profile, completion }
 
   const run = async () => {
     setErr('')
+    if (mode === 'gen' && missingProfileFields.length) {
+      return setErr('Complétez les informations manquantes de votre profil avant de générer le CV.')
+    }
     if (!profile.nom) return setErr('Remplissez d’abord votre profil (nom au minimum).')
     setBusy(true)
     try {
@@ -142,7 +147,18 @@ function Generator({ mode, presetCompany, companies, meta, profile, completion }
   return (
     <div className="mt-6 grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
       <section className="card self-start p-5">
-        {completion.percent < 40 && <p className="mb-3 rounded-lg bg-gold-soft px-3 py-2 text-[12px] text-gold-ink">Profil complété à {completion.percent}% : le CV généré sera court. Rien n’est inventé.</p>}
+        {missingProfileFields.length > 0 && (
+          <div role="status" className="mb-4 rounded-xl border border-gold/40 bg-gold-soft p-4 text-[13px] text-gold-ink">
+            <p className="font-semibold">Complétez votre profil avant de générer un CV.</p>
+            <p className="mt-1">Ces informations sont nécessaires pour créer un CV complet sans rien inventer :</p>
+            <ul className="mt-2 list-inside list-disc space-y-1">
+              {missingProfileFields.map((item) => (
+                <li key={item.field}><Link className="font-semibold underline" to={item.href}>{item.label}</Link></li>
+              ))}
+            </ul>
+            <Link to="/profil" className="btn-outline mt-3 inline-flex !py-2">Enrichir mon profil</Link>
+          </div>
+        )}
         <label className="block text-[13px] font-semibold">Entreprise ciblée
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filtrer la liste…" className={field} aria-label="Filtrer les entreprises" />
           <select value={cid} onChange={(e) => setCid(e.target.value)} className={field} aria-label="Entreprise ciblée">
@@ -170,7 +186,7 @@ function Generator({ mode, presetCompany, companies, meta, profile, completion }
           <span><strong>Utiliser l’IA</strong><span className="block text-[11px] text-muted">{meta.ai.enabled ? `Fournisseur : ${meta.ai.provider}` : 'Aucune clé IA configurée : mode modèle'}</span></span>
           <input type="checkbox" checked={ai && meta.ai.enabled} disabled={!meta.ai.enabled} onChange={(e) => setAi(e.target.checked)} className="h-4 w-4 accent-primary" />
         </label>
-        <button className="btn-primary mt-4 w-full" disabled={busy} onClick={run}><Sparkles size={17} />{busy ? 'Génération…' : mode === 'gen' ? 'Générer CV + e-mail' : 'Générer la lettre'}</button>
+        <button className="btn-primary mt-4 w-full" disabled={busy || (mode === 'gen' && missingProfileFields.length > 0)} onClick={run}><Sparkles size={17} />{busy ? 'Génération…' : mode === 'gen' ? 'Générer CV + e-mail' : 'Générer la lettre'}</button>
         {err && <p role="alert" className="mt-3 text-[13px] text-red-600">{err}</p>}
         <p className="mt-3 text-[11px] text-muted">Le contenu généré est un brouillon à relire : seules les informations de votre profil sont utilisées.</p>
       </section>

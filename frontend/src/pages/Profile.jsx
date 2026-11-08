@@ -1,5 +1,6 @@
 import { Camera, Check, Download, FileText, Trash2, Upload } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { libCvUrl } from '../api'
 import UserAvatar from '../components/ui/UserAvatar'
 import { useStore } from '../store/useStore'
@@ -148,8 +149,14 @@ function AvatarPicker() {
 
 export default function Profile() {
   const { profile, skills, completion, saveProfile } = useStore()
+  const { hash } = useLocation()
   const [info, setInfo] = useState(null)
   const [skill, setSkill] = useState('')
+
+  useEffect(() => {
+    if (!hash) return
+    document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [hash])
 
   const addSkill = async (e) => {
     e.preventDefault()
@@ -171,7 +178,7 @@ export default function Profile() {
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-8">
       <div className="h-[140px] rounded-t-3xl bg-gradient-to-r from-navy-900 to-navy-600 md:h-[170px]" />
-      <div className="card relative -mt-[60px] mx-0 flex flex-wrap items-center gap-5 p-6 md:mx-9">
+      <div id="infos-personnelles" className="card relative -mt-[60px] mx-0 flex flex-wrap items-center gap-5 p-6 md:mx-9">
         <AvatarPicker />
         <div className="min-w-0 flex-1">
           <h1 className="text-[30px] font-normal">{profile.nom || 'Votre nom'}</h1>
@@ -214,7 +221,7 @@ export default function Profile() {
             </ul>
           </section>}
 
-          <section className="card p-6">
+          <section id="competences" className="card p-6">
             <h2 className="text-[22px] font-normal">Compétences</h2>
             <div className="mt-4 flex flex-wrap gap-2.5">
               {skills.length === 0 && <p className="text-[13px] text-muted">Aucune compétence.</p>}
