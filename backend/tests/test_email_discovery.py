@@ -15,10 +15,17 @@ def test_finds_public_email_with_the_official_page_as_source(monkeypatch):
         ),
     }
     monkeypatch.setattr(email_discovery, "_is_public_host", lambda _host: True)
-    monkeypatch.setattr(email_discovery, "_fetch_page", lambda url, _host: pages.get(url))
+    visited = []
+
+    def fetch(url, _host):
+        visited.append(url)
+        return pages.get(url)
+
+    monkeypatch.setattr(email_discovery, "_fetch_page", fetch)
 
     results = email_discovery.find_public_emails("https://company.example")
 
+    assert visited[:2] == ["https://company.example/", "https://company.example/contactez-nous"]
     assert results == [{
         "email": "recrutement@company.example",
         "source": "https://company.example/contactez-nous",

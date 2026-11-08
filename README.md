@@ -117,8 +117,8 @@ Avant l'envoi, vérifie le destinataire et le contenu du message dans la fenêtr
 
 ## Honnêteté des données
 - Les entreprises viennent d'un fichier de données Google Maps ; BookJob ne lance pas de scraping global en arrière-plan et les fiches n'ont souvent pas d'adresse e-mail.
-- Quand une fiche contient un e-mail, BookJob le propose. Sinon, à l'ouverture de « Postuler », il cherche les adresses publiquement affichées sur le site officiel enregistré et indique la page source. Si le site ne fournit pas d'adresse, elle doit être saisie manuellement. Vérifie toujours l'adresse trouvée avant d'envoyer le CV.
-- BookJob envoie des candidatures par e-mail à l'adresse vérifiée. Il ne soumet pas automatiquement de formulaires sur les sites d'emploi, LinkedIn ou les portails de recrutement, et une adresse publique ne garantit pas qu'elle soit celle du recruteur.
+- Quand une fiche contient un e-mail, BookJob le propose. Sinon, à l'ouverture de « Postuler », il cherche les adresses publiquement affichées sur le site officiel enregistré et indique la page source. La recherche priorise les pages de contact indiquées par le site ; si aucune adresse n'est publiée (ou si l'entreprise n'a pas de site enregistré), l'adresse doit être vérifiée et saisie manuellement. BookJob ne devine jamais une adresse.
+- BookJob envoie des candidatures par e-mail à l'adresse vérifiée. Le succès confirme que Gmail a créé le message dans « Envoyés », mais ne garantit pas que le serveur du destinataire l'a remis dans sa boîte ou qu'il l'a lu. Il ne soumet pas automatiquement de formulaires sur les sites d'emploi, LinkedIn ou les portails de recrutement, et une adresse publique ne garantit pas qu'elle soit celle du recruteur.
 - Le matching est une correspondance textuelle indicative : il compte les compétences déclarées dans le profil qui sont explicitement citées dans l'offre fournie. Il ne mesure ni l'expérience réelle ni une probabilité d'embauche. Sans description d'offre, BookJob n'invente pas de score et signale la candidature spontanée.
 - Positions sur la carte : niveau quartier (pas de GPS dans l'export), sauf géocodage Google activé.
 

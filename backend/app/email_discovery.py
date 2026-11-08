@@ -138,12 +138,16 @@ def find_public_emails(site_url: str) -> list[dict[str, str]]:
     homepage, base_host = _normalize_site_url(site_url)
     pending = [homepage]
     parsed_home = urlsplit(homepage)
-    for path in ("/contact", "/contact-us", "/contactez-nous", "/nous-contacter", "/recrutement", "/careers"):
-        pending.append(urlunsplit(("https", parsed_home.netloc, path, "", "")))
+    fallback = [
+        urlunsplit(("https", parsed_home.netloc, path, "", ""))
+        for path in ("/contact", "/contact-us", "/contactez-nous", "/nous-contacter", "/recrutement", "/careers")
+    ]
 
     found: dict[str, dict[str, str]] = {}
     visited = set()
-    while pending and len(visited) < MAX_PAGES:
+    while (pending or fallback) and len(visited) < MAX_PAGES:
+        if not pending:
+            pending, fallback = fallback, []
         page_url = pending.pop(0)
         if page_url in visited:
             continue
@@ -161,7 +165,8 @@ def find_public_emails(site_url: str) -> list[dict[str, str]]:
             elif len(pending) + len(visited) < MAX_PAGES:
                 link = urljoin(final_url, href)
                 if _is_same_site(link, base_host) and any(word in urlsplit(link).path.lower() for word in CONTACT_WORDS):
-                    pending.append(link)
+                    if link not in pending and link not in visited:
+                        pending.insert(0, link)
         for email in emails:
             normalized = email.strip(".,;:")
             if normalized and normalized.lower() not in found:

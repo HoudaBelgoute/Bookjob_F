@@ -88,6 +88,10 @@ export default function ApplyModal({
       setEmailLookupBusy(false)
       return
     }
+    if (!recipientTouched.current) {
+      setRecipient('')
+      setSelectedEmailSource('')
+    }
     if (!company?.id) {
       setEmailLookupStatus('Aucune entreprise du répertoire sélectionnée : saisissez l’adresse du recruteur.')
       setContactEmails([])
@@ -143,7 +147,8 @@ export default function ApplyModal({
     if (contactMethod === 'email' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient.trim())) {
       errors.recipient = 'Indiquez une adresse e-mail valide pour le recruteur.'
     }
-    if (contactMethod === 'email' && recipient.trim().toLowerCase() === gmailStatus?.sender?.trim().toLowerCase()) {
+    if (contactMethod === 'email' && gmailStatus?.sender
+      && recipient.trim().toLowerCase() === gmailStatus.sender.trim().toLowerCase()) {
       errors.recipient = 'Cette adresse est votre Gmail expéditeur, pas celle du recruteur. Indiquez l’adresse de l’entreprise.'
     }
     if (contactMethod === 'whatsapp' && !normalizeWhatsAppNumber(phone)) {
