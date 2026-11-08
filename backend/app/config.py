@@ -113,8 +113,9 @@ COLS = ["ID", "Entreprise", "Secteur", "Poste_visé", "Email_contact", "Source",
         "Date_candidature", "Date_relance", "Date_entretien", "Fichier_CV", "Remarque",
         "Date_modification", "Derniere_activite", "Derniere_verification_email"]
 SOURCES = ["Google Maps", "Candidature directe", "LinkedIn", "Indeed", "Rekrute", "Emploi.ma", "Autre"]
-PROFILE_FIELDS = ["nom", "titre", "email", "tel", "ville", "linkedin", "resume", "competences",
-                  "formation", "experiences", "projets", "langues", "certifs"]
+PROFILE_FIELDS = ["nom", "prenom", "nom_famille", "titre", "email", "tel", "ville", "linkedin",
+                  "filiere", "diplomes", "resume", "competences", "formation", "experiences",
+                  "engagement_associatif", "projets", "langues", "certifs"]
 
 # IA : Groq uniquement.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")

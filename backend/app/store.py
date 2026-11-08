@@ -102,9 +102,12 @@ def split_list(txt: str) -> list[str]:
 
 
 PROFILE_SECTIONS = [  # (champ, libellé, poids)
-    ("nom", "Nom complet", 10), ("titre", "Intitulé visé", 10), ("email", "E-mail", 10), ("tel", "Téléphone", 5),
-    ("ville", "Ville", 5), ("resume", "Résumé professionnel", 10), ("competences", "Compétences", 15),
-    ("formation", "Formation", 10), ("experiences", "Expériences", 10), ("projets", "Projets", 10),
+    ("nom", "Nom complet", 10), ("prenom", "Prénom", 2), ("nom_famille", "Nom", 2),
+    ("titre", "Intitulé visé", 10), ("email", "E-mail", 10), ("tel", "Téléphone", 5),
+    ("ville", "Ville / localisation", 5), ("filiere", "Filière", 2), ("diplomes", "Diplômes", 3),
+    ("resume", "Profil professionnel", 10), ("competences", "Compétences", 15),
+    ("formation", "Formation", 10), ("experiences", "Expérience professionnelle", 10),
+    ("engagement_associatif", "Engagement associatif", 1), ("projets", "Projets", 10),
     ("langues", "Langues", 3), ("certifs", "Certifications", 2),
 ]
 

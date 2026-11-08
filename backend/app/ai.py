@@ -11,6 +11,11 @@ from .store import split_list
 def provider() -> str:
     return "groq" if C.GROQ_API_KEY else "none"
 
+
+def candidate_name(profile: dict) -> str:
+    return " ".join(x for x in [profile.get("prenom"), profile.get("nom_famille")] if x).strip() or profile.get("nom", "")
+
+
 class AIError(Exception):
     pass
 
@@ -35,9 +40,12 @@ def complete(system: str, messages: list[dict], max_tokens: int = 2000) -> str:
         raise AIError(str(ex)) from ex
 
 
-CV_SYSTEM = """Tu rédiges en français un CV d'une page et un e-mail de candidature pour un stage.
+CV_SYSTEM = """Tu rédiges en français un CV d'une page compatible ATS et un e-mail de candidature pour un stage.
 RÈGLES STRICTES : utilise UNIQUEMENT les informations du PROFIL fourni. N'invente aucun diplôme, employeur, date,
 chiffre, outil ou compétence. Tu peux reformuler, réordonner et mettre en avant ce qui correspond à l'offre et au secteur.
+Présente le prénom, le nom, la filière, le profil professionnel, les diplômes, la formation, l'expérience professionnelle,
+les compétences, l'engagement associatif, les langues et les coordonnées lorsqu'ils sont renseignés.
+Utilise une seule colonne, des titres de section classiques, sans tableau, icône ni mise en page décorative.
 Si une information utile manque, ne la crée pas : signale-la dans une section finale 'À compléter'.
 Format de sortie : le CV en Markdown, puis une ligne '===MAIL===', puis l'objet (ligne 'Objet : ...') et le corps de l'e-mail (5-7 lignes)."""
 
@@ -63,17 +71,23 @@ def cv_modele(p: dict, offre: str = "") -> str:
     comp = split_list(p.get("competences", ""))
     comp.sort(key=lambda c: -any(m in c.lower() for m in mots))
     bloc = lambda t, k: f"\n## {t}\n{p[k]}\n" if p.get(k, "").strip() else ""
+    full_name = candidate_name(p)
     contact = " · ".join(x for x in [p.get("email"), p.get("tel"), p.get("ville"), p.get("linkedin")] if x)
-    return (f"# {p.get('nom', '')}\n{p.get('titre', '')}\n\n{contact}\n"
-            + bloc("Profil", "resume") + (f"\n## Compétences\n{' · '.join(comp)}\n" if comp else "")
-            + bloc("Formation", "formation") + bloc("Expériences", "experiences") + bloc("Projets", "projets")
-            + bloc("Langues", "langues") + bloc("Certifications", "certifs"))
+    profile = "\n".join(x for x in [p.get("filiere"), p.get("resume")] if x)
+    education = "\n".join(x for x in [p.get("diplomes"), p.get("formation")] if x)
+    return (f"# {full_name}\n{p.get('titre', '')}\n\n{contact}\n"
+            + (f"\n## Profil\n{profile}\n" if profile else "")
+            + (f"\n## Compétences\n{' · '.join(comp)}\n" if comp else "")
+            + (f"\n## Formation\n{education}\n" if education else "")
+            + bloc("Expérience professionnelle", "experiences")
+            + bloc("Engagement associatif", "engagement_associatif")
+            + bloc("Projets", "projets") + bloc("Langues", "langues") + bloc("Certifications", "certifs"))
 
 
 def mail_modele(p: dict, entreprise: str, poste: str) -> str:
     return (f"Objet : Candidature au poste de {poste}\n\nBonjour,\n\nJe vous adresse ma candidature spontanée pour un stage "
             f"({poste}) chez {entreprise}. Vous trouverez mon CV en pièce jointe et je reste disponible pour échanger.\n\n"
-            f"Cordialement,\n{p.get('nom', '')}\n{p.get('tel', '')}")
+            f"Cordialement,\n{candidate_name(p)}\n{p.get('tel', '')}")
 
 
 def generer(p: dict, entreprise: str, secteur: str, poste: str, offre: str, use_ai: bool) -> dict:
@@ -92,10 +106,11 @@ def lettre(p: dict, entreprise: str, poste: str, ton: str, use_ai: bool) -> dict
                        f"PROFIL :\n{json.dumps(p, ensure_ascii=False)}\n\nENTREPRISE : {entreprise}\nPOSTE : {poste}"}], 1200)
         return {"lettre": txt.strip(), "mode": provider()}
     comp = ", ".join(split_list(p.get("competences", "")))
-    corps = (f"Madame, Monsieur,\n\nÉtudiant(e) en {p.get('formation') or 'formation'}, je souhaite effectuer un stage ({poste}) "
+    parcours = p.get("diplomes") or p.get("formation") or p.get("filiere") or "formation"
+    corps = (f"Madame, Monsieur,\n\nÉtudiant(e) en {parcours}, je souhaite effectuer un stage ({poste}) "
              f"au sein de {entreprise}.\n\n" + (f"Mes compétences : {comp}.\n\n" if comp else "")
              + (f"Parmi mes projets : {p['projets']}.\n\n" if p.get("projets") else "")
-             + "Je serais ravi(e) de vous rencontrer pour échanger sur ma candidature.\n\nCordialement,\n" + p.get("nom", ""))
+             + "Je serais ravi(e) de vous rencontrer pour échanger sur ma candidature.\n\nCordialement,\n" + candidate_name(p))
     return {"lettre": corps, "mode": "modele"}
 
 

@@ -74,7 +74,7 @@ function CvSection() {
       {cvs.length === 0 ? (
         <div className="mt-4 rounded-xl border border-dashed border-line px-4 py-6 text-center">
           <FileText className="mx-auto text-muted" size={24} />
-          <p className="mt-2 text-[13px] text-muted">Aucun CV importé. Formats acceptés : PDF ou Word, 5 Mo maximum.</p>
+          <p className="mt-2 text-[13px] text-muted">Aucun CV importé. Format accepté : PDF uniquement, 5 Mo maximum.</p>
         </div>
       ) : (
         <ul className="mt-4 space-y-3">
@@ -168,7 +168,8 @@ export default function Profile() {
   const removeSkill = (s) => saveProfile({ competences: skills.filter((x) => x !== s).join(', ') })
   const saveInfo = async (e) => {
     e.preventDefault()
-    if (await saveProfile(info)) setInfo(null)
+    const fullName = [info.prenom, info.nom_famille].map((value) => value?.trim()).filter(Boolean).join(' ')
+    if (await saveProfile({ ...info, nom: fullName || info.nom || '' })) setInfo(null)
   }
   const F = (k, label, type = 'text') => (
     <label className="block text-[13px] font-semibold">{label}<input type={type} value={info[k] || ''} onChange={(e) => setInfo({ ...info, [k]: e.target.value })} className={`${field} mt-1.5 font-normal`} /></label>
@@ -181,16 +182,16 @@ export default function Profile() {
       <div id="infos-personnelles" className="card relative -mt-[60px] mx-0 flex flex-wrap items-center gap-5 p-6 md:mx-9">
         <AvatarPicker />
         <div className="min-w-0 flex-1">
-          <h1 className="text-[30px] font-normal">{profile.nom || 'Votre nom'}</h1>
+          <h1 className="text-[30px] font-normal">{[profile.prenom, profile.nom_famille].filter(Boolean).join(' ') || profile.nom || 'Votre nom'}</h1>
           <p className="text-[14px] text-muted">{[profile.titre, profile.ville].filter(Boolean).join(' · ') || 'Complétez votre profil'}</p>
           <p className="text-[13px] text-muted">{[profile.email, profile.tel, profile.linkedin].filter(Boolean).join(' · ')}</p>
         </div>
-        <button className="btn-outline" onClick={() => setInfo({ ...profile })}>Modifier mes informations</button>
+        <button className="btn-outline" onClick={() => setInfo({ ...profile, prenom: profile.prenom || '', nom_famille: profile.nom_famille || '' })}>Modifier mes informations</button>
       </div>
 
       {info && (
         <form onSubmit={saveInfo} className="card mt-5 grid gap-4 p-6 md:grid-cols-2">
-          {F('nom', 'Nom complet')}{F('titre', 'Intitulé visé (ex. Stagiaire Data Analyst)')}{F('email', 'E-mail', 'email')}{F('tel', 'Téléphone', 'tel')}{F('ville', 'Ville')}{F('linkedin', 'LinkedIn / GitHub')}
+          {F('prenom', 'Prénom')}{F('nom_famille', 'Nom')}{F('titre', 'Poste visé (ex. Stage Data Analyst)')}{F('email', 'E-mail', 'email')}{F('tel', 'Téléphone', 'tel')}{F('ville', 'Ville / localisation')}{F('linkedin', 'LinkedIn / portfolio')}
           <div className="flex gap-3 md:col-span-2"><button className="btn-primary !py-2.5">Enregistrer</button><button type="button" className="btn-outline !py-2.5" onClick={() => setInfo(null)}>Annuler</button></div>
         </form>
       )}
@@ -198,9 +199,12 @@ export default function Profile() {
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="space-y-5">
           <CvSection />
-          <TextSection id="resume" field="resume" title="À propos" sub="Votre présentation professionnelle (utilisée dans le CV)." hint="Ex. Étudiant en data analyse, je cherche un stage PFE à Marrakech…" />
-          <TextSection id="formation" field="formation" title="Formation" sub="Une ligne par diplôme : année – diplôme – école." rows={4} />
-          <TextSection id="experiences" field="experiences" title="Expériences" sub="Poste – structure – période – missions." rows={5} />
+          <TextSection id="resume" field="resume" title="Profil professionnel" sub="Résumé court de votre profil, spécialité et objectif." hint="Ex. Étudiant en data analyse, je recherche un stage PFE à Marrakech…" rows={4} />
+          <TextSection id="filiere" field="filiere" title="Filière" sub="Votre filière ou spécialité principale." hint="Ex. Data science et intelligence artificielle" rows={2} />
+          <TextSection id="diplomes" field="diplomes" title="Diplômes" sub="Diplôme, établissement et année d’obtention ou période." hint="Ex. Licence en informatique — Université X — 2024" rows={4} />
+          <TextSection id="formation" field="formation" title="Formation" sub="Parcours scolaire et universitaire : établissement, ville et dates." hint="Ex. 09/2023 - 06/2026 — École / Université, Marrakech" rows={4} />
+          <TextSection id="experiences" field="experiences" title="Expérience professionnelle" sub="Poste, organisme, dates, missions et résultats. Indiquez « aucune » si vous débutez." hint="Ex. 06/2025 - 08/2025 — Stagiaire Data, Entreprise — Analysé…; automatisé… (+20 %)" rows={5} />
+          <TextSection id="engagement-associatif" field="engagement_associatif" title="Engagement associatif" sub="Association, rôle, dates et actions menées. Indiquez « aucun » si non applicable." hint="Ex. 2024 - 2025 — Bénévole, Association X — Organisé…" rows={4} />
           <TextSection id="projets" field="projets" title="Projets / portfolio" sub="Titre, technologies, résultats, lien GitHub." rows={5} />
           <TextSection id="langues" field="langues" title="Langues" sub="Séparées par des virgules." rows={2} />
           <TextSection id="certifs" field="certifs" title="Certifications" sub="Nom – organisme – date." rows={3} />
