@@ -114,6 +114,23 @@ export default function Applications() {
     return () => { active = false }
   }, [])
 
+  useEffect(() => {
+    const handleGmailConnected = (event) => {
+      if (event.origin !== window.location.origin || event.data?.type !== 'bookjob-gmail-connected') return
+      setEmailSyncError('')
+      Promise.all([api.emailSyncStatus(), api.emailSyncReviews()])
+        .then(([status, reviews]) => {
+          setEmailSync(status)
+          setEmailReviews(reviews.items)
+        })
+        .catch((error) => {
+          setEmailSyncError(error.message || 'Impossible de charger le statut Gmail.')
+        })
+    }
+    window.addEventListener('message', handleGmailConnected)
+    return () => window.removeEventListener('message', handleGmailConnected)
+  }, [])
+
   const synchronizeEmails = async () => {
     setEmailSyncBusy(true)
     setEmailSyncError('')
@@ -188,10 +205,13 @@ export default function Applications() {
                 {emailSync?.gmail?.connected
                   ? emailSync.gmail.read_authorized
                     ? `Gmail connecté · dernière vérification : ${emailSync.last_checked ? fmtDate(emailSync.last_checked) : 'jamais'}`
-                    : 'Gmail connecté, mais l’autorisation de lecture doit être renouvelée.'
+                    : 'Gmail connecté, mais l’accès en lecture manque. Clique sur « Renouveler Gmail » et autorise la lecture des e-mails.'
                   : 'Connectez Gmail pour rechercher les réponses aux candidatures.'}
               </p>
-              {emailSync?.status === 'error' && emailSync.error && <p role="alert" className="mt-1 text-[13px] text-red-700">{emailSync.error}</p>}
+              <p className="mt-1 text-[12px] text-muted">
+                Google demandera l’accès Gmail en lecture pour vérifier les réponses. L’envoi et les brouillons nécessitent aussi leurs autorisations respectives.
+              </p>
+              {emailSync?.status === 'error' && emailSync.error && emailSync.error !== emailSyncError && <p role="alert" className="mt-1 text-[13px] text-red-700">{emailSync.error}</p>}
               {emailSyncError && <p role="alert" className="mt-1 text-[13px] text-red-700">{emailSyncError}</p>}
             </div>
           </div>

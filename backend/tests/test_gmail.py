@@ -3,6 +3,7 @@ import json
 import time
 from email import message_from_bytes
 from email.message import EmailMessage
+from urllib.parse import parse_qs, urlsplit
 
 from app import config as C
 from app import gmail
@@ -16,6 +17,20 @@ class FakeResponse:
 
     def json(self):
         return self.payload
+
+
+def test_authorization_requests_gmail_read_and_preserves_previously_granted_scopes(monkeypatch):
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_REDIRECT_URI", "https://bookjob.example/api/google/callback")
+
+    query = parse_qs(urlsplit(gmail.authorization_url("oauth-state")).query)
+
+    assert gmail.GMAIL_READ_SCOPE in query["scope"][0].split()
+    assert gmail.GMAIL_SEND_SCOPE in query["scope"][0].split()
+    assert gmail.GMAIL_COMPOSE_SCOPE in query["scope"][0].split()
+    assert query["include_granted_scopes"] == ["true"]
+    assert "consent" in query["prompt"][0]
 
 
 def test_oauth_code_exchange_stores_refresh_token_without_a_gmail_password(monkeypatch, tmp_path):
@@ -52,10 +67,12 @@ def test_oauth_code_exchange_stores_refresh_token_without_a_gmail_password(monke
 def test_send_refreshes_expired_token_and_posts_mime_message_to_gmail(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_ID", "client-id")
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setattr(C, "GOOGLE_OAUTH_REDIRECT_URI", "https://bookjob.example/api/google/callback")
     monkeypatch.setattr(C, "GOOGLE_TOKEN_FILE", tmp_path / "oauth.json")
     C.GOOGLE_TOKEN_FILE.write_text(json.dumps({
         "access_token": "expired", "refresh_token": "refresh-token", "expires_at": time.time() - 10,
         "email": "person@gmail.com",
+        "scopes": [gmail.GMAIL_SEND_SCOPE],
     }), encoding="utf-8")
     calls = []
 
