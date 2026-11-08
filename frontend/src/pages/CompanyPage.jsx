@@ -21,6 +21,7 @@ import SitePreview from '../components/company/SitePreview'
 import { hostOf } from '../components/company/siteShot'
 import CompanyLogo from '../components/ui/CompanyLogo'
 import { useStore } from '../store/useStore'
+import { buildWhatsAppUrl } from '../utils/whatsapp'
 
 const go = (sectionId) => document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
@@ -63,6 +64,11 @@ export default function CompanyPage() {
 
   const fav = favorites.includes(c.id)
   const t = tracking.find((x) => x.id === c.id)
+  const goalLabel = goal === 'emploi' ? 'un emploi' : goal === 'spontanee' ? 'une candidature spontanée' : 'un stage ou un PFE'
+  const whatsappUrl = buildWhatsAppUrl(
+    c.telephone,
+    `Bonjour, je souhaite vous contacter au sujet de ${goalLabel} chez ${c.short}. Pourriez-vous m’indiquer la personne à contacter ?`,
+  )
   const quartier = c.quartier && c.quartier !== 'Non précisé' ? `, quartier ${c.quartier}` : ''
   const about = [
     `${c.short} est une entreprise du secteur « ${c.secteur} » basée à ${c.ville}${quartier}.`,
@@ -247,9 +253,20 @@ export default function CompanyPage() {
                   <button type="button" onClick={() => setContactMethod('email')} aria-pressed={contactMethod === 'email'} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold transition-all ${contactMethod === 'email' ? 'border-primary bg-primary text-white shadow-card' : 'border-line bg-white text-ink hover:border-primary hover:bg-primary-soft'}`}>
                     <Mail size={17} /> Contacter via E-mail
                   </button>
-                  <button type="button" onClick={() => setContactMethod('whatsapp')} aria-pressed={contactMethod === 'whatsapp'} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold transition-all ${contactMethod === 'whatsapp' ? 'border-primary bg-primary text-white shadow-card' : 'border-line bg-white text-ink hover:border-primary hover:bg-primary-soft'}`}>
-                    <MessageCircle size={17} /> Contacter via WhatsApp
-                  </button>
+                  {whatsappUrl ? (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setContactMethod('whatsapp')}
+                      aria-label={`Contacter ${c.short} via WhatsApp`}
+                      className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold transition-all ${contactMethod === 'whatsapp' ? 'border-primary bg-primary text-white shadow-card' : 'border-line bg-white text-ink hover:border-primary hover:bg-primary-soft'}`}
+                    >
+                      <MessageCircle size={17} /> Contacter via WhatsApp
+                    </a>
+                  ) : (
+                    <p role="status" className="self-center text-[13px] text-muted">Numéro WhatsApp non disponible ou invalide.</p>
+                  )}
                 </div>
               </div>
               <div className="rounded-2xl border border-line border-t-[3px] border-t-[#dc8796] bg-white p-5 sm:p-6">

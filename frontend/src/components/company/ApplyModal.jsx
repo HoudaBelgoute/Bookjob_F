@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
 import Modal from '../ui/Modal'
 import { useStore } from '../../store/useStore'
+import { buildWhatsAppUrl, normalizeWhatsAppNumber } from '../../utils/whatsapp'
 
 export default function ApplyModal({
   company,
@@ -136,7 +137,7 @@ export default function ApplyModal({
     if (contactMethod === 'email' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient.trim())) {
       errors.recipient = 'Indiquez une adresse e-mail valide pour le recruteur.'
     }
-    if (contactMethod === 'whatsapp' && phone.replace(/\D/g, '').length < 8) {
+    if (contactMethod === 'whatsapp' && !normalizeWhatsAppNumber(phone)) {
       errors.phone = 'Indiquez un numéro WhatsApp valide pour l’entreprise.'
     }
     setFieldErrors(errors)
@@ -151,6 +152,7 @@ export default function ApplyModal({
       ? `${generatedBody}\n\n--- Lettre de motivation ---\n${coverLetter.trim()}`
       : generatedBody
     const subjectLine = `Candidature – ${poste} – ${ent}`
+    const whatsappUrl = contactMethod === 'whatsapp' ? buildWhatsAppUrl(phone, externalMessage) : ''
     const externalWindow = contactMethod === 'whatsapp' || !(gmailStatus?.connected && gmailStatus?.draft_authorized)
       ? window.open('', '_blank')
       : null
@@ -180,10 +182,7 @@ export default function ApplyModal({
       setBody(generatedBody)
 
       if (contactMethod === 'whatsapp') {
-        const number = phone.replace(/\D/g, '').replace(/^0/, '212')
-        const url = new URL(`https://wa.me/${number}`)
-        url.searchParams.set('text', externalMessage)
-        externalWindow.location.href = url.toString()
+        externalWindow.location.href = whatsappUrl
         setSecureSendPending(false)
         setConfirmationExpiresAt(null)
         setConfirmationRequested(true)
@@ -228,6 +227,10 @@ export default function ApplyModal({
 
   const retryDelivery = async () => {
     setErr('')
+    const externalMessage = coverLetter.trim()
+      ? `${body.trim()}\n\n--- Lettre de motivation ---\n${coverLetter.trim()}`
+      : body.trim()
+    const whatsappUrl = contactMethod === 'whatsapp' ? buildWhatsAppUrl(phone, externalMessage) : ''
     const externalWindow = contactMethod === 'whatsapp' || !(gmailStatus?.connected && gmailStatus?.draft_authorized)
       ? window.open('', '_blank')
       : null
@@ -238,13 +241,8 @@ export default function ApplyModal({
     setBusy(true)
     try {
       if (contactMethod === 'whatsapp') {
-        const number = phone.replace(/\D/g, '').replace(/^0/, '212')
-        const url = new URL(`https://wa.me/${number}`)
-        const externalMessage = coverLetter.trim()
-          ? `${body.trim()}\n\n--- Lettre de motivation ---\n${coverLetter.trim()}`
-          : body.trim()
-        url.searchParams.set('text', externalMessage)
-        externalWindow.location.href = url.toString()
+        if (!whatsappUrl) throw new Error('Indiquez un numéro WhatsApp marocain valide pour l’entreprise.')
+        externalWindow.location.href = whatsappUrl
         setConfirmationRequested(true)
         setSecureSendPending(false)
         setConfirmationExpiresAt(null)
@@ -271,9 +269,6 @@ export default function ApplyModal({
       gmailUrl.searchParams.set('fs', '1')
       gmailUrl.searchParams.set('to', recipient.trim())
       gmailUrl.searchParams.set('su', subject.trim())
-      const externalMessage = coverLetter.trim()
-        ? `${body.trim()}\n\n--- Lettre de motivation ---\n${coverLetter.trim()}`
-        : body.trim()
       gmailUrl.searchParams.set('body', externalMessage)
       externalWindow.location.href = gmailUrl.toString()
       setConfirmationRequested(true)
