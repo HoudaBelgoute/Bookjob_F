@@ -8,6 +8,7 @@ import ApplyModal from './ApplyModal'
 
 // Fiche entreprise complète (panneau de droite de la recherche + page entreprise).
 export default function CompanyDetail({ id }) {
+  const navigate = useNavigate()
   const { favorites, toggleFavorite, addToTracking, updateTracking, meta, openCompany, askAssistant, tracking } = useStore()
   const [c, setC] = useState(null)
   const [apply, setApply] = useState(false)

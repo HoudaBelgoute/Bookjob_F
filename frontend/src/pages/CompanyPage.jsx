@@ -6,6 +6,8 @@ import {
   ExternalLink,
   FileText,
   Globe,
+  Mail,
+  MessageCircle,
   MapPin,
   Phone,
   Sparkles,
@@ -29,6 +31,8 @@ export default function CompanyPage() {
   const [c, setC] = useState(null)
   const [error, setError] = useState('')
   const [apply, setApply] = useState(false)
+  const [contactMethod, setContactMethod] = useState('email')
+  const [goal, setGoal] = useState('stage')
 
   useEffect(() => {
     let live = true
@@ -183,7 +187,7 @@ export default function CompanyPage() {
         </div>
       </section>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="mt-8">
         <div className="space-y-6">
           <section id="entreprise" className="card scroll-mt-24 p-6 md:p-8">
             <p className="eyebrow">01 / Découvrir</p>
@@ -232,32 +236,33 @@ export default function CompanyPage() {
             </div>
           </section>
 
-          {c.similar?.length > 0 && (
-            <section className="card p-6 md:p-8">
-              <h2 className="text-[22px] font-semibold text-ink">Entreprises similaires</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {c.similar.map((similar) => (
-                  <button
-                    key={similar.id}
-                    onClick={() => navigate(`/entreprises/${encodeURIComponent(similar.id)}`)}
-                    className="flex items-center gap-3 rounded-xl border border-line p-3 text-left transition hover:-translate-y-0.5 hover:border-primary hover:shadow-pop"
-                  >
-                    <CompanyLogo company={similar} size="sm" />
-                    <span className="min-w-0">
-                      <span className="block truncate text-[14px] font-medium text-ink">{similar.short}</span>
-                      <span className="text-[12px] text-muted">{similar.quartier} · score {similar.score}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-
-        <aside>
-          <section id="contact" className="card scroll-mt-24 p-6 md:sticky md:top-24 md:p-8">
+          <section id="contact" className="card scroll-mt-24 p-6 md:p-8">
             <p className="eyebrow">03 / Faire le premier pas</p>
             <h2 className="mt-2 text-[26px] font-semibold text-ink">Prendre contact</h2>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-line border-t-[3px] border-t-gold bg-white p-5 sm:p-6">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">01 / Le contact</p>
+                <h3 className="mt-3 text-[16px] font-bold text-primary">Comment souhaitez-vous contacter l’entreprise ?</h3>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setContactMethod('email')} aria-pressed={contactMethod === 'email'} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold transition-all ${contactMethod === 'email' ? 'border-primary bg-primary text-white shadow-card' : 'border-line bg-white text-ink hover:border-primary hover:bg-primary-soft'}`}>
+                    <Mail size={17} /> Contacter via E-mail
+                  </button>
+                  <button type="button" onClick={() => setContactMethod('whatsapp')} aria-pressed={contactMethod === 'whatsapp'} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold transition-all ${contactMethod === 'whatsapp' ? 'border-primary bg-primary text-white shadow-card' : 'border-line bg-white text-ink hover:border-primary hover:bg-primary-soft'}`}>
+                    <MessageCircle size={17} /> Contacter via WhatsApp
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-line border-t-[3px] border-t-[#dc8796] bg-white p-5 sm:p-6">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">02 / Votre objectif</p>
+                <label className="mt-3 block text-[16px] font-bold text-primary" htmlFor="company-application-goal">Que recherchez-vous ?</label>
+                <select id="company-application-goal" value={goal} onChange={(event) => setGoal(event.target.value)} className="mt-1.5 w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-[14px] font-normal outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10">
+                  <option value="stage">Stage / PFE</option>
+                  <option value="emploi">Emploi</option>
+                  <option value="spontanee">Candidature spontanée</option>
+                </select>
+                <p className="mt-2 text-[12px] text-muted">Ce choix personnalise votre message et votre candidature.</p>
+              </div>
+            </div>
             <ul className="mt-5 space-y-4 text-[14px] text-muted">
               <li className="flex gap-3">
                 <MapPin size={18} className="mt-0.5 shrink-0 text-primary" />
@@ -293,10 +298,31 @@ export default function CompanyPage() {
             </ul>
             <button onClick={() => setApply(true)} className="btn-primary mt-6 w-full">Préparer ma candidature</button>
           </section>
-        </aside>
+
+          {c.similar?.length > 0 && (
+            <section className="card p-6 md:p-8">
+              <h2 className="text-[22px] font-semibold text-ink">Entreprises similaires</h2>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {c.similar.map((similar) => (
+                  <button
+                    key={similar.id}
+                    onClick={() => navigate(`/entreprises/${encodeURIComponent(similar.id)}`)}
+                    className="flex items-center gap-3 rounded-xl border border-line p-3 text-left transition hover:-translate-y-0.5 hover:border-primary hover:shadow-pop"
+                  >
+                    <CompanyLogo company={similar} size="sm" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-[14px] font-medium text-ink">{similar.short}</span>
+                      <span className="text-[12px] text-muted">{similar.quartier} · score {similar.score}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
       </div>
 
-      {apply && <ApplyModal company={c} onClose={() => setApply(false)} />}
+      {apply && <ApplyModal company={c} contactMethod={contactMethod} goal={goal} onClose={() => setApply(false)} />}
     </div>
   )
 }

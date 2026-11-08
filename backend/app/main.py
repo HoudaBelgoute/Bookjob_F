@@ -417,7 +417,7 @@ def _track_out(r: dict, d: pd.DataFrame | None = None) -> dict:
 def _save_upload(f: UploadFile, folder: Path, base: str) -> tuple[str, int]:
     ext = (f.filename or "").rsplit(".", 1)[-1].lower() if "." in (f.filename or "") else ""
     if ext not in C.ALLOWED_CV_EXT:
-        raise HTTPException(400, "Format non pris en charge : PDF ou Word (doc, docx) uniquement")
+        raise HTTPException(400, "Format non pris en charge : PDF uniquement")
     data = f.file.read(C.MAX_UPLOAD + 1)
     if len(data) > C.MAX_UPLOAD:
         raise HTTPException(400, "Fichier trop volumineux (5 Mo maximum)")
@@ -510,8 +510,6 @@ def _application_email_message(sender: str, request_data: dict) -> EmailMessage:
             charset="utf-8",
             filename="lettre_motivation.txt",
         )
-    else:
-        raise HTTPException(400, "La lettre de motivation n'est plus disponible.")
     return message
 
 
@@ -844,8 +842,8 @@ def request_application_confirmation(
         raise HTTPException(400, "Le titre ou le lien de l'offre est invalide.")
     if offer_url and not re.fullmatch(r"https?://[^\s]+", offer_url):
         raise HTTPException(400, "Le lien de l'offre doit commencer par http:// ou https://.")
-    if not body.strip() or (not cover_letter.strip() and not (cover_letter_file and cover_letter_file.filename)):
-        raise HTTPException(400, "Le message et une lettre de motivation (texte ou fichier) sont obligatoires.")
+    if not body.strip():
+        raise HTTPException(400, "Le message de candidature est obligatoire.")
 
     with _EMAIL_LOCK:
         d = S.load_tracking()
@@ -983,7 +981,8 @@ def request_application_confirmation(
             + "\n\n" + "\n".join(offer_lines)
             + "\n\n" + "\n".join(match_lines)
             + "\n\nMessage qui sera envoyé :\n" + body.strip()
-            + "\n\nLettre : " + (cover_letter.strip() or f"Fichier joint : {letter_filename}")
+            + ("\n\nLettre : " + cover_letter.strip() if cover_letter.strip()
+               else (f"\n\nFichier joint : {letter_filename}" if letter_filename else "\n\nAucune lettre jointe."))
             + f"\n\nCV joint : {row['Fichier_CV']}"
             + "\n\nVérifie le brouillon dans Gmail sans l'envoyer ni le modifier."
             + f"\n\nPour envoyer la candidature à l'entreprise, confirme ici (valable 20 minutes) :\n{confirm_url}"
@@ -1011,14 +1010,14 @@ def request_application_confirmation(
         preview_message.add_alternative(
             f"""<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="referrer" content="no-referrer">
             <body><h1>Confirme ta candidature avant l'envoi</h1>
-            <p>Le CV et la lettre ne seront transmis à l'entreprise qu'après ton clic sur le bouton ci-dessous.</p>
+            <p>Le CV et, le cas échéant, la lettre ne seront transmis à l'entreprise qu'après ton clic sur le bouton ci-dessous.</p>
             <p><strong>Destinataire prévu :</strong> {escape(recipient)}<br>
             <strong>Objet :</strong> {escape(subject)}</p>
             <h2>Informations disponibles sur l'entreprise</h2><ul>{html_items}</ul>
             <h2>Offre et matching avec ton profil</h2>{offer_html}<ul>{match_html}</ul>
             <h2>Message prévu</h2><pre>{escape(body.strip())}</pre>
             <p><strong>Pièces jointes prévues :</strong> CV {escape(str(row["Fichier_CV"]))};
-            lettre {escape(letter_filename or 'lettre_motivation.txt')}.</p>
+            lettre {escape(letter_filename or ('lettre_motivation.txt' if cover_letter.strip() else 'aucune'))}.</p>
             <p>Vérifie le brouillon dans Gmail sans l'envoyer ni le modifier.</p>
             <p><a href="{escape(confirm_url, quote=True)}">Vérifier puis confirmer l'envoi à l'entreprise</a></p>
             <p>Ce lien expire dans 20 minutes. Si tu n'as pas demandé cette candidature, ignore cet e-mail.</p>
@@ -1214,7 +1213,8 @@ def email_confirmation_details(body: ConfirmationTokenIn):
             "match": request_data["match"],
             "attachments": [
                 request_data.get("cv_filename", ""),
-                request_data.get("cover_letter_file") or "lettre_motivation.txt",
+                request_data.get("cover_letter_file")
+                or ("lettre_motivation.txt" if request_data.get("cover_letter") else "aucune"),
             ],
         }
 

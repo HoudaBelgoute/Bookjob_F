@@ -1,8 +1,10 @@
 import json
 import re
+from io import BytesIO
 
 import pandas as pd
 import pytest
+from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
 from app import config as C
@@ -287,17 +289,51 @@ def _configure_application(monkeypatch, tmp_path, *, send=None):
     return state, client
 
 
-def _request_confirmation(client):
-    response = client.post("/api/tracking/EXT-TEST/send", data={
+def _request_confirmation(client, *, include_cover_letter=True):
+    form = {
         "recipient": "recrutement@example.com",
         "subject": "Candidature stage Data",
         "body": "Bonjour, voici ma candidature.",
-        "cover_letter": "Madame, Monsieur,\nJe souhaite effectuer mon stage chez vous.",
         "offer_title": "Stage Data",
         "offer_url": "https://example.com/jobs/stage-data",
         "offer_description": "Nous recherchons des compétences Python et analyse de données.",
-    })
+    }
+    if include_cover_letter:
+        form["cover_letter"] = "Madame, Monsieur,\nJe souhaite effectuer mon stage chez vous."
+    response = client.post("/api/tracking/EXT-TEST/send", data=form)
     return response
+
+
+def test_application_email_message_allows_no_cover_letter(monkeypatch, tmp_path):
+    cv_dir = tmp_path / "cvs"
+    cv_dir.mkdir()
+    (cv_dir / "application.pdf").write_bytes(b"%PDF-1.4 test")
+    monkeypatch.setattr(C, "user_path", lambda path: path)
+    monkeypatch.setattr(C, "CV_SENT_DIR", cv_dir)
+
+    message = main._application_email_message("sender@gmail.com", {
+        "recipient": "recrutement@example.com",
+        "subject": "Candidature",
+        "body": "Bonjour, je vous adresse ma candidature.",
+        "cv_filename": "application.pdf",
+    })
+
+    assert [part.get_filename() for part in message.iter_attachments()] == ["application.pdf"]
+
+
+def test_application_upload_accepts_only_pdf(tmp_path):
+    pdf_upload = UploadFile(filename="cv.pdf", file=BytesIO(b"%PDF-1.4 test"))
+
+    filename, size = main._save_upload(pdf_upload, tmp_path, "candidate_cv")
+
+    assert filename == "candidate_cv.pdf"
+    assert size == len(b"%PDF-1.4 test")
+    assert (tmp_path / filename).read_bytes() == b"%PDF-1.4 test"
+
+    word_upload = UploadFile(filename="cv.docx", file=BytesIO(b"word document"))
+    with pytest.raises(HTTPException) as exc_info:
+        main._save_upload(word_upload, tmp_path, "candidate_word_cv")
+    assert exc_info.value.detail == "Format non pris en charge : PDF uniquement"
 
 
 def test_preview_email_requires_separate_one_time_confirmation(monkeypatch, tmp_path):
@@ -368,6 +404,41 @@ def test_preview_email_requires_separate_one_time_confirmation(monkeypatch, tmp_
     }
 
 
+def test_cover_letter_is_optional_for_application_email(monkeypatch, tmp_path):
+    state, client = _configure_application(monkeypatch, tmp_path)
+
+    response = _request_confirmation(client, include_cover_letter=False)
+
+    assert response.status_code == 200
+    preview = state["messages"][0]
+    assert [item.get_filename() for item in preview.iter_attachments()] == ["application.pdf"]
+    assert "Aucune lettre jointe." in preview.get_body(preferencelist=("plain",)).get_content()
+    token_match = re.search(
+        r"/api/email/confirm#([A-Za-z0-9_-]+)",
+        preview.get_body(preferencelist=("plain",)).get_content(),
+    )
+    assert token_match
+    token = token_match.group(1)
+    details = client.post(
+        "/api/email/confirm/details",
+        json={"token": token},
+        headers={"X-BookJob-Confirmation-Token": token},
+    )
+    assert details.status_code == 200
+    assert details.json()["attachments"] == ["application.pdf", "aucune"]
+
+    confirmed = client.post(
+        "/api/email/confirm",
+        json={"token": token},
+        headers={"X-BookJob-Confirmation-Token": token},
+    )
+
+    assert confirmed.status_code == 200
+    assert [item.get_filename() for item in state["messages"][1].iter_attachments()] == [
+        "application.pdf",
+    ]
+
+
 def test_send_preview_requires_authorized_gmail_account(monkeypatch, tmp_path):
     _state, client = _configure_application(monkeypatch, tmp_path)
     monkeypatch.setattr(main.gmail, "status", lambda: {
@@ -392,13 +463,13 @@ def test_uploaded_cover_letter_is_attached_to_preview_and_final_email(monkeypatc
     response = client.post(
         "/api/tracking/EXT-TEST/send",
         data=form,
-        files={"cover_letter_file": ("lettre.docx", b"document-word", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        files={"cover_letter_file": ("lettre.pdf", b"%PDF-1.4 letter", "application/pdf")},
     )
 
     assert response.status_code == 200
     preview = state["messages"][0]
     assert [item.get_filename() for item in preview.iter_attachments()] == [
-        "application.pdf", "EXT_TEST_lettre.docx",
+        "application.pdf", "EXT_TEST_lettre.pdf",
     ]
     token = re.search(
         r"/api/email/confirm#([A-Za-z0-9_-]+)",
@@ -415,9 +486,9 @@ def test_uploaded_cover_letter_is_attached_to_preview_and_final_email(monkeypatc
     application = state["messages"][1]
     attachments = list(application.iter_attachments())
     assert [item.get_filename() for item in attachments] == [
-        "application.pdf", "EXT_TEST_lettre.docx",
+        "application.pdf", "EXT_TEST_lettre.pdf",
     ]
-    assert attachments[1].get_payload(decode=True) == b"document-word"
+    assert attachments[1].get_payload(decode=True) == b"%PDF-1.4 letter"
 
 
 def test_expired_confirmation_cannot_be_used(monkeypatch, tmp_path):

@@ -18,7 +18,7 @@ function Card({ app, statuts, onMenu, menuOpen, onMove, onRemove, onEdit, onOpen
     <article draggable onDragStart={(e) => e.dataTransfer.setData('text/plain', app.id)} className="card relative cursor-grab p-4 active:cursor-grabbing">
       <div className="flex items-start justify-between">
         <CompanyLogo company={app} size="sm" />
-        <button onClick={onMenu} aria-label="Actions" className="rounded-lg p-1 text-muted hover:bg-surface"><MoreHorizontal size={18} /></button>
+        <button onClick={(event) => { event.stopPropagation(); onMenu() }} aria-label="Actions" className="rounded-lg p-1 text-muted hover:bg-surface"><MoreHorizontal size={18} /></button>
       </div>
       {menuOpen && (
         <div className="absolute right-3 top-12 z-10 max-h-72 w-56 overflow-y-auto rounded-xl border border-line bg-white p-1.5 shadow-pop">
@@ -153,8 +153,8 @@ export default function Applications() {
         </div>
         <div className="flex flex-wrap gap-2">
           <a className="btn-outline !px-4 !py-3.5" href={exportUrl}><Download size={17} /> Exporter CSV</a>
-          <button className="btn-outline !px-4 !py-3.5" onClick={() => setShowAdd(true)}><Plus size={18} /> Offre trouvée ailleurs</button>
-          <button className="btn-primary !px-5 !py-3.5" onClick={() => setApplyFor(true)}><Plus size={18} /> Nouvelle candidature</button>
+          <button type="button" className="btn-outline !px-4 !py-3.5" onClick={() => setShowAdd(true)}><Plus size={18} /> Offre trouvée ailleurs</button>
+          <button type="button" className="btn-primary !px-5 !py-3.5" onClick={() => setApplyFor(true)}><Plus size={18} /> Nouvelle candidature</button>
         </div>
       </div>
 
