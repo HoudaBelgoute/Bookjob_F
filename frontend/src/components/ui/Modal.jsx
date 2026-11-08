@@ -19,7 +19,7 @@ export default function Modal({ title, onClose, children, wide = false }) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`my-auto max-h-[calc(100dvh-1rem)] w-full overflow-y-auto overscroll-contain ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-2xl bg-white p-4 shadow-pop sm:max-h-[calc(100dvh-2rem)] sm:p-6`}
+        className={`my-auto max-h-[calc(100dvh-1rem)] w-full overflow-y-auto overscroll-contain ${wide ? 'max-w-5xl' : 'max-w-md'} rounded-2xl bg-white p-4 shadow-pop sm:max-h-[calc(100dvh-2rem)] sm:p-6`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">

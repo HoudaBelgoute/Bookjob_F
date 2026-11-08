@@ -9,16 +9,16 @@ from . import config as C
 PAGE_STYLE = {
     "minHeight": "100vh",
     "padding": "32px clamp(16px, 4vw, 56px)",
-    "backgroundColor": "#f5f7fb",
-    "color": "#17233b",
+    "backgroundColor": "#f3f6fb",
+    "color": "#0f2444",
     "fontFamily": "system-ui, sans-serif",
 }
 CARD_STYLE = {
     "backgroundColor": "#ffffff",
-    "border": "1px solid #e5eaf2",
-    "borderRadius": "16px",
-    "padding": "20px",
-    "boxShadow": "0 4px 18px rgba(23, 35, 59, 0.05)",
+    "border": "1px solid #e1e8f2",
+    "borderRadius": "18px",
+    "padding": "24px",
+    "boxShadow": "0 10px 30px rgba(15, 36, 68, 0.06)",
 }
 GRAPH_CONFIG = {"displayModeBar": False, "responsive": True}
 
@@ -46,18 +46,41 @@ def _chart_layout(figure, title: str):
         title={"text": title, "x": 0.03, "xanchor": "left"},
         template="plotly_white",
         margin={"l": 24, "r": 24, "t": 64, "b": 24},
-        font={"family": "system-ui, sans-serif", "color": "#17233b"},
+        font={"family": "system-ui, sans-serif", "color": "#0f2444"},
         paper_bgcolor="white",
         plot_bgcolor="white",
+        colorway=["#245da8", "#c8a652", "#1f8a5b", "#8170c7", "#df7b8e", "#4b82b7"],
+        hoverlabel={"bgcolor": "#0f2444", "font": {"color": "white"}},
     )
     return figure
 
 
 def _status_figure(data: pd.DataFrame):
     counts = data["Statut"].value_counts().rename_axis("Statut").reset_index(name="Candidatures")
+    is_empty = counts.empty
     if counts.empty:
         counts = pd.DataFrame({"Statut": ["Aucune donnée"], "Candidatures": [0]})
-    figure = px.pie(counts, names="Statut", values="Candidatures", hole=0.58)
+    figure = px.pie(
+        counts,
+        names="Statut",
+        values="Candidatures",
+        hole=0.62,
+        color_discrete_sequence=["#245da8", "#c8a652", "#1f8a5b", "#8170c7", "#df7b8e", "#4b82b7"],
+    )
+    figure.update_traces(
+        textposition="inside",
+        textfont={"color": "white", "size": 12},
+        marker={"line": {"color": "white", "width": 3}},
+        hovertemplate="%{label}<br>%{value} candidature(s) · %{percent}<extra></extra>",
+    )
+    if is_empty:
+        figure.add_annotation(
+            text="Aucune candidature",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font={"size": 12, "color": "#65738b"},
+        )
     return _chart_layout(figure, "Candidatures par statut")
 
 
@@ -68,7 +91,24 @@ def _timeline_figure(data: pd.DataFrame):
     else:
         dated["Mois"] = dated["Date_candidature"].dt.to_period("M").dt.to_timestamp()
         counts = dated.groupby("Mois").size().reset_index(name="Candidatures")
-    figure = px.line(counts, x="Mois", y="Candidatures", markers=True)
+    figure = px.line(counts, x="Mois", y="Candidatures", markers=True, color_discrete_sequence=["#245da8"])
+    figure.update_traces(
+        line={"width": 3},
+        marker={"size": 8, "line": {"color": "white", "width": 2}},
+        fill="tozeroy",
+        fillcolor="rgba(36, 93, 168, 0.08)",
+        hovertemplate="%{x|%B %Y}<br>%{y} candidature(s)<extra></extra>",
+    )
+    if dated.empty:
+        figure.add_annotation(
+            text="Vos candidatures envoyées apparaîtront ici",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            font={"size": 13, "color": "#65738b"},
+        )
     figure.update_xaxes(title=None)
     figure.update_yaxes(title="Nombre de candidatures", rangemode="tozero")
     return _chart_layout(figure, "Évolution des candidatures envoyées")
@@ -81,7 +121,21 @@ def _sector_figure(load_companies):
         counts = counts.head(10).sort_values().rename_axis("Secteur").reset_index(name="Entreprises")
     else:
         counts = pd.DataFrame({"Secteur": pd.Series(dtype="object"), "Entreprises": pd.Series(dtype="int64")})
-    figure = px.bar(counts, x="Entreprises", y="Secteur", orientation="h")
+    figure = px.bar(counts, x="Entreprises", y="Secteur", orientation="h", color_discrete_sequence=["#245da8"])
+    figure.update_traces(
+        marker={"cornerradius": 8},
+        hovertemplate="%{y}<br>%{x} entreprise(s)<extra></extra>",
+    )
+    if counts.empty:
+        figure.add_annotation(
+            text="Aucune entreprise disponible",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            font={"size": 13, "color": "#65738b"},
+        )
     figure.update_xaxes(title="Nombre d'entreprises", rangemode="tozero")
     figure.update_yaxes(title=None)
     return _chart_layout(figure, "Entreprises par secteur (10 principaux)")
@@ -105,47 +159,83 @@ def create_dash_app(load_tracking, load_companies) -> Dash:
         ]
         return html.Main(
             [
-                html.A("← Retour à BookJob", href="/", style={"color": "#245da8", "textDecoration": "none"}),
-                html.H1("Analyse des candidatures", style={"marginBottom": "8px"}),
-                html.P(
-                    "Vue interactive de ton suivi et des entreprises disponibles.",
-                    style={"color": "#65738b", "marginTop": 0},
+                html.Section(
+                    [
+                        html.Div(
+                            [
+                                html.Span("✦", className="dash-star dash-star-one", **{"aria-hidden": "true"}),
+                                html.Span("✧", className="dash-star dash-star-two", **{"aria-hidden": "true"}),
+                                html.Span("✦", className="dash-star dash-star-three", **{"aria-hidden": "true"}),
+                                html.A("← Retour à BookJob", href="/", className="dash-back"),
+                                html.P("VOTRE PARCOURS, EN UN COUP D’ŒIL", className="dash-eyebrow"),
+                                html.H1("Analyse des candidatures", className="dash-title"),
+                                html.P(
+                                    "Suivez vos démarches, repérez les prochaines étapes et faites avancer votre recherche.",
+                                    className="dash-subtitle",
+                                ),
+                            ],
+                            className="dash-hero-content",
+                        ),
+                    ],
+                    className="dash-hero",
                 ),
                 html.Div(
                     [
-                        html.Div([html.Div("Candidatures suivies"), html.Strong(str(len(data)), id="kpi-tracked")], style=CARD_STYLE),
-                        html.Div([html.Div("Envoyées"), html.Strong(str(sent), id="kpi-sent")], style=CARD_STYLE),
-                        html.Div([html.Div("Entretiens / offres"), html.Strong(str(interviews), id="kpi-interviews")], style=CARD_STYLE),
+                        html.Div(
+                            [
+                                html.P("Candidatures suivies", className="dash-kpi-label"),
+                                html.Strong(str(len(data)), id="kpi-tracked", className="dash-kpi-value"),
+                                html.Span("dans votre suivi", className="dash-kpi-note"),
+                            ],
+                            className="dash-kpi dash-kpi-blue",
+                        ),
+                        html.Div(
+                            [
+                                html.P("Envoyées", className="dash-kpi-label"),
+                                html.Strong(str(sent), id="kpi-sent", className="dash-kpi-value"),
+                                html.Span("démarches réalisées", className="dash-kpi-note"),
+                            ],
+                            className="dash-kpi dash-kpi-gold",
+                        ),
+                        html.Div(
+                            [
+                                html.P("Entretiens / offres", className="dash-kpi-label"),
+                                html.Strong(str(interviews), id="kpi-interviews", className="dash-kpi-value"),
+                                html.Span("nouvelles opportunités", className="dash-kpi-note"),
+                            ],
+                            className="dash-kpi dash-kpi-green",
+                        ),
                     ],
-                    style={
-                        "display": "grid",
-                        "gridTemplateColumns": "repeat(auto-fit, minmax(180px, 1fr))",
-                        "gap": "16px",
-                        "margin": "24px 0",
-                    },
+                    className="dash-kpis",
                 ),
-                html.Label("Filtrer les candidatures par statut", htmlFor="status-filter"),
-                dcc.Dropdown(
-                    id="status-filter",
-                    options=options,
-                    value="",
-                    clearable=False,
-                    style={"maxWidth": "420px", "marginTop": "8px"},
-                ),
-                html.Div(
+                html.Section(
                     [
-                        dcc.Graph(id="status-chart", figure=_status_figure(data), config=GRAPH_CONFIG),
-                        dcc.Graph(id="timeline-chart", figure=_timeline_figure(data), config=GRAPH_CONFIG),
-                        dcc.Graph(id="sector-chart", figure=_sector_figure(load_companies), config=GRAPH_CONFIG),
+                        html.Div(
+                            [
+                                html.Label("Filtrer les candidatures par statut", htmlFor="status-filter", className="dash-filter-label"),
+                                dcc.Dropdown(
+                                    id="status-filter",
+                                    options=options,
+                                    value="",
+                                    clearable=False,
+                                    className="dash-dropdown",
+                                ),
+                            ],
+                            className="dash-filter",
+                        ),
+                        html.Div(
+                            [
+                                html.Div(dcc.Graph(id="status-chart", figure=_status_figure(data), config=GRAPH_CONFIG), className="dash-chart"),
+                                html.Div(dcc.Graph(id="timeline-chart", figure=_timeline_figure(data), config=GRAPH_CONFIG), className="dash-chart"),
+                                html.Div(dcc.Graph(id="sector-chart", figure=_sector_figure(load_companies), config=GRAPH_CONFIG), className="dash-chart dash-chart-wide"),
+                            ],
+                            className="dash-charts",
+                        ),
                     ],
-                    style={
-                        "display": "grid",
-                        "gridTemplateColumns": "repeat(auto-fit, minmax(min(100%, 380px), 1fr))",
-                        "gap": "16px",
-                        "marginTop": "20px",
-                    },
+                    className="dash-analytics",
                 ),
             ],
+            className="dash-page",
             style=PAGE_STYLE,
         )
 

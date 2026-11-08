@@ -6,7 +6,7 @@ export default function UserAvatar({ name, url, className = 'h-10 w-10 rounded-f
   const [broken, setBroken] = useState(false)
   useEffect(() => setBroken(false), [url])
   return (
-    <span className={`flex shrink-0 items-center justify-center overflow-hidden bg-[#dbe6f7] font-bold text-navy-900 ${className}`}>
+    <span className={`user-avatar flex shrink-0 items-center justify-center overflow-hidden bg-[#dbe6f7] font-bold text-navy-900 ${className}`}>
       {url && !broken ? (
         <img src={url} alt="" className="h-full w-full object-cover" onError={() => setBroken(true)} />
       ) : (

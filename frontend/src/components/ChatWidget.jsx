@@ -1,4 +1,4 @@
-import { Plus, Send, Sparkles, Trash2, X } from 'lucide-react'
+import { MessageCircle, Plus, Send, Sparkles, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { AI_QUESTIONS } from '../data/data'
 import { useStore } from '../store/useStore'
@@ -63,10 +63,11 @@ export default function ChatWidget() {
       <button
         type="button"
         onClick={() => setChatOpen(true)}
-        className="fixed bottom-6 right-6 z-30 flex items-center gap-2.5 rounded-full bg-navy-900 px-5 py-3.5 text-[14px] font-semibold text-white shadow-fab hover:bg-navy-800"
+        className="assistant-fab fixed bottom-6 right-6 z-30 flex items-center gap-2.5 rounded-full bg-navy-900 px-5 py-3.5 text-[14px] font-semibold text-white shadow-fab hover:bg-navy-800"
       >
-        <Sparkles size={18} className="text-gold" />
+        <span className="assistant-fab-icon"><Sparkles size={18} className="text-gold" /></span>
         Assistant IA
+        <MessageCircle size={15} className="assistant-fab-message" />
       </button>
     )
   }
@@ -80,7 +81,7 @@ export default function ChatWidget() {
     <section
       role="dialog"
       aria-label="Assistant IA"
-      className="fixed inset-x-3 bottom-3 z-40 flex h-[min(600px,calc(100vh-1.5rem))] flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-pop sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[390px]"
+      className="assistant-panel fixed inset-x-3 bottom-3 z-40 flex h-[min(600px,calc(100vh-1.5rem))] flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-pop sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[390px]"
     >
       <header className="flex items-center gap-3 bg-navy-900 px-4 py-3 text-white">
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-gold"><Sparkles size={17} /></span>

@@ -50,10 +50,17 @@ def test_dash_dashboard_is_mounted_and_serves_interactive_layout(monkeypatch, tm
     client = _authenticated_client(monkeypatch, tmp_path)
     page = client.get("/api/dash/")
     layout = client.get("/api/dash/_dash-layout")
+    dashboard_css = client.get("/api/dash/assets/dashboard.css")
+    dashboard_js = client.get("/api/dash/assets/dashboard.js")
 
     assert page.status_code == 200
     assert "/api/dash/_favicon.ico" in page.text
+    assert dashboard_css.status_code == 200
+    assert ".dash-hero" in dashboard_css.text
+    assert dashboard_js.status_code == 200
+    assert "pointermove" in dashboard_js.text
     assert layout.status_code == 200
+    assert "dash-hero" in str(layout.json())
     assert {
         "status-filter",
         "status-chart",
