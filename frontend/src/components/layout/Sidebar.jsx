@@ -66,7 +66,7 @@ function Item({ to, label, icon: Icon, end, badge, onNavigate }) {
   )
 }
 
-export default function Sidebar({ onNavigate }) {
+export default function Sidebar({ onNavigate, onToggle }) {
   const { profile, completion, avatarUrl } = useStore()
   const { required, signOut: authSignOut } = useAuth()
   const pct = completion.percent
@@ -99,16 +99,34 @@ export default function Sidebar({ onNavigate }) {
     }
   }
 
+  const logoContent = (
+    <>
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+        <Briefcase size={20} />
+      </span>
+      <span className="text-[24px] font-bold tracking-tight">
+        Book<span className="text-[#5aa0ff]">Job</span>
+      </span>
+    </>
+  )
+
   return (
     <div className="flex h-full flex-col overflow-hidden bg-navy-900 text-white">
-      <Link to="/" onClick={onNavigate} className="flex items-center gap-3 border-b border-white/10 px-6 py-4">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-          <Briefcase size={20} />
-        </span>
-        <span className="text-[24px] font-bold tracking-tight">
-          Book<span className="text-[#5aa0ff]">Job</span>
-        </span>
-      </Link>
+      {onToggle ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label="Masquer le menu"
+          title="Masquer le menu"
+          className="flex w-full items-center gap-3 border-b border-white/10 px-6 py-4 text-left"
+        >
+          {logoContent}
+        </button>
+      ) : (
+        <Link to="/" onClick={onNavigate} className="flex items-center gap-3 border-b border-white/10 px-6 py-4">
+          {logoContent}
+        </Link>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <p className="px-6 pb-3 pt-7 text-[12px] font-semibold uppercase tracking-[0.16em] text-[#9fb2d0]">

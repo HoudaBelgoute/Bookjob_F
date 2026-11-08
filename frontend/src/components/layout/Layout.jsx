@@ -1,4 +1,5 @@
-import { X } from 'lucide-react'
+import clsx from 'clsx'
+import { Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
@@ -11,6 +12,23 @@ export default function Layout() {
   const [drawer, setDrawer] = useState(false)
   const { pathname } = useLocation()
   const { ready, error, init } = useStore()
+
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleSidebar = () =>
+    setCollapsed((c) => {
+      const next = !c
+      try {
+        localStorage.setItem('sidebar-collapsed', next ? '1' : '0')
+      } catch {}
+      return next
+    })
 
   useEffect(() => {
     init()
@@ -38,10 +56,26 @@ export default function Layout() {
   if (!ready) return <div className="p-10 text-muted">Chargement des données…</div>
 
   return (
-    <div className="min-h-full lg:pl-[288px]">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[288px] lg:block">
-        <Sidebar />
+    <div className={clsx('min-h-full transition-[padding] duration-200', collapsed ? 'lg:pl-[72px]' : 'lg:pl-[288px]')}>
+      <aside
+        className={clsx(
+          'fixed inset-y-0 left-0 z-40 hidden w-[288px] transition-transform duration-200 lg:block',
+          collapsed && '-translate-x-full',
+        )}
+      >
+        <Sidebar onToggle={toggleSidebar} />
       </aside>
+
+      {collapsed && (
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Afficher le menu"
+          className="fixed left-4 top-4 z-40 hidden h-11 w-11 items-center justify-center rounded-xl bg-navy-900 text-white shadow-pop lg:flex"
+        >
+          <Menu size={20} />
+        </button>
+      )}
 
       {drawer && (
         <div className="fixed inset-0 z-50 lg:hidden">
