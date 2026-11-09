@@ -250,7 +250,7 @@ export default function CompanyPage() {
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">01 / Le contact</p>
                 <h3 className="mt-3 text-[16px] font-bold text-primary">Comment souhaitez-vous contacter l’entreprise ?</h3>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setContactMethod('email')} aria-pressed={contactMethod === 'email'} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold transition-all ${contactMethod === 'email' ? 'border-primary bg-primary text-white shadow-card' : 'border-line bg-white text-ink hover:border-primary hover:bg-primary-soft'}`}>
+                  <button type="button" onClick={() => { setContactMethod('email'); setApply(true) }} aria-pressed={contactMethod === 'email'} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold transition-all ${contactMethod === 'email' ? 'border-primary bg-primary text-white shadow-card' : 'border-line bg-white text-ink hover:border-primary hover:bg-primary-soft'}`}>
                     <Mail size={17} /> Contacter via E-mail
                   </button>
                   {whatsappUrl ? (
