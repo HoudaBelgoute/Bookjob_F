@@ -26,9 +26,9 @@ export const useStore = create((set, get) => ({
   activeCompanyId: null,
   allCompanies: [],
 
-  notify: (message) => {
+  notify: (message, type = 'success') => {
     const id = Date.now()
-    set({ toast: { id, message } })
+    set({ toast: { id, message, type } })
     setTimeout(() => get().toast?.id === id && set({ toast: null }), 3200)
   },
 
@@ -69,7 +69,7 @@ export const useStore = create((set, get) => ({
       return r
     } catch (e) {
       if (epoch !== userDataEpoch) return null
-      get().notify(e.message)
+      get().notify(e.message, 'error')
       return null
     }
   },

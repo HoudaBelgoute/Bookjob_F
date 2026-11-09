@@ -12,17 +12,29 @@ export default function CompanyDetail({ id }) {
   const { favorites, toggleFavorite, addToTracking, updateTracking, meta, openCompany, askAssistant, tracking } = useStore()
   const [c, setC] = useState(null)
   const [apply, setApply] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const t = tracking.find((x) => x.id === id)
 
   useEffect(() => {
     let live = true
-    api.company(id).then((r) => live && setC(r)).catch(() => live && setC(null))
+    setLoadError('')
+    setC(null)
+    api.company(id)
+      .then((r) => { if (live) setC(r) })
+      .catch((error) => { if (live) setLoadError(error.message || 'Impossible de charger cette entreprise.') })
     return () => {
       live = false
     }
-  }, [id, tracking.length, t?.statut])
+  }, [id, loadAttempt])
 
-  if (!c || c.id !== id) return <div className="p-6 text-[14px] text-muted">Chargement…</div>
+  if (loadError) return (
+    <div className="p-6 text-[14px]">
+      <p role="alert" className="text-red-700">{loadError}</p>
+      <button type="button" className="mt-3 font-semibold text-primary underline" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>Réessayer</button>
+    </div>
+  )
+  if (!c || c.id !== id) return <div role="status" className="p-6 text-[14px] text-muted">Chargement…</div>
   const fav = favorites.includes(id)
   const R = 34
   const circ = 2 * Math.PI * R

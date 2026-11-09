@@ -237,6 +237,7 @@ export default function Statistics() {
   const [meta, setMeta] = useState(null)
   const [error, setError] = useState('')
   const [qualityError, setQualityError] = useState('')
+  const [metaError, setMetaError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const load = async () => {
@@ -254,7 +255,7 @@ export default function Statistics() {
   useEffect(() => {
     load()
     api.dataQuality().then(setQuality).catch((e) => setQualityError(e.message))
-    api.meta().then(setMeta).catch(() => {})
+    api.meta().then(setMeta).catch((e) => setMetaError(e.message || 'Impossible de charger les entreprises.'))
   }, [])
 
   const statusItems = Object.entries(data?.by_status || {}).map(([label, value]) => ({ label, value }))
@@ -361,6 +362,7 @@ export default function Statistics() {
       {meta && <Panel title="Carte des secteurs" eyebrow="MARCHÉ · SECTEURS" subtitle="Comparaison des volumes dans les catégories de la base.">
         <HorizontalBars items={sectors} color="#FFB454" />
       </Panel>}
+      {metaError && <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{metaError}</p>}
 
       <DataQuality q={quality} error={qualityError} />
     </div>

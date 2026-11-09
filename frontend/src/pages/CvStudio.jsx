@@ -21,11 +21,12 @@ const field = 'mt-1.5 w-full rounded-xl border border-line bg-white px-3.5 py-2.
 
 function printHtml(title, md, tpl) {
   const w = window.open('', '_blank')
-  if (!w) return
+  if (!w) return false
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{${TEMPLATES[tpl]};max-width:760px;margin:30px auto;line-height:1.45}h1{font-size:24px;margin:0}h2{font-size:15px;border-bottom:1px solid #ccc;margin-top:18px;text-transform:uppercase;letter-spacing:.05em}p{margin:4px 0}</style></head><body>${mdToHtml(md)}</body></html>`)
   w.document.close()
   w.focus()
   w.print()
+  return true
 }
 
 function download(name, text) {
@@ -96,7 +97,7 @@ export default function CvStudio() {
 }
 
 function Generator({ mode, presetCompany, companies, meta, profile }) {
-  const { tracking } = useStore()
+  const { tracking, notify } = useStore()
   const [cid, setCid] = useState(presetCompany || '')
   const [poste, setPoste] = useState(profile.titre || '')
   const [offre, setOffre] = useState('')
@@ -201,7 +202,9 @@ function Generator({ mode, presetCompany, companies, meta, profile }) {
                 <h2 className="text-[18px] font-medium">CV <span className="ml-2 text-[11px] font-normal text-muted">brouillon {used === 'modele' ? '(modèle)' : `(IA : ${used})`}</span></h2>
                 <div className="flex gap-2">
                   <button className="btn-outline !py-2" onClick={() => download(`CV_${(company?.short || 'cv').slice(0, 20)}.md`, cv)}><Download size={16} /> .md</button>
-                  <button className="btn-outline !py-2" onClick={() => printHtml('CV', cv, tpl)}><Printer size={16} /> Imprimer / PDF</button>
+                  <button type="button" className="btn-outline !py-2" onClick={() => {
+                    if (!printHtml('CV', cv, tpl)) notify('Autorisez les fenêtres pop-up pour imprimer votre CV.', 'error')
+                  }}><Printer size={16} /> Imprimer / PDF</button>
                 </div>
               </div>
               <div className="mt-4 grid gap-4 xl:grid-cols-2">
@@ -225,7 +228,9 @@ function Generator({ mode, presetCompany, companies, meta, profile }) {
               <h2 className="text-[18px] font-medium">Lettre de motivation <span className="ml-2 text-[11px] font-normal text-muted">brouillon {used === 'modele' ? '(modèle)' : `(IA : ${used})`}</span></h2>
               <div className="flex gap-2">
                 <button className="btn-outline !py-2" onClick={() => download('lettre_motivation.txt', letter)}><Download size={16} /> .txt</button>
-                <button className="btn-outline !py-2" onClick={() => printHtml('Lettre', letter, 'Classique')}><Printer size={16} /> Imprimer / PDF</button>
+                <button type="button" className="btn-outline !py-2" onClick={() => {
+                  if (!printHtml('Lettre', letter, 'Classique')) notify('Autorisez les fenêtres pop-up pour imprimer votre lettre.', 'error')
+                }}><Printer size={16} /> Imprimer / PDF</button>
               </div>
             </div>
             <textarea value={letter} onChange={(e) => setLetter(e.target.value)} rows={16} aria-label="Lettre (modifiable)" className="mt-4 w-full rounded-xl border border-line p-3 text-[14px] outline-none focus:border-primary" />

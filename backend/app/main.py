@@ -2196,10 +2196,12 @@ def cron_email_sync(request: Request):
 @app.post("/api/reset/tracking")
 def reset_tracking():
     d = S.load_tracking()
+    tracking_ids = d.ID.astype(str).tolist()
+    S.save_tracking(pd.DataFrame(columns=C.COLS))
+    accounts.clear_tracking_history(C.current_user_id(), tracking_ids)
     for f in d.Fichier_CV:
         if f and (C.user_path(C.CV_SENT_DIR) / f).exists():
             (C.user_path(C.CV_SENT_DIR) / f).unlink()
-    S.save_tracking(pd.DataFrame(columns=C.COLS))
     return {"ok": True}
 
 

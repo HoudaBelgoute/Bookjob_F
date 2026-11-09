@@ -20,14 +20,21 @@ export default function MapPage() {
   const [adresse, setAdresse] = useState(home?.label || '')
   const [coords, setCoords] = useState({ lat: home?.lat ?? 31.6295, lon: home?.lon ?? -7.9811 })
   const [busy, setBusy] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [reloadItems, setReloadItems] = useState(0)
   const [sel, setSel] = useState(null)
   const mapEl = useRef(null)
   const map = useRef(null)
   const layer = useRef(null)
 
   useEffect(() => {
-    api.companies({ secteur: secteur ? [secteur] : [], priorite, dmax: dmax || undefined, sort: home ? 'distance' : 'score', limit: 500 }).then((r) => setItems(r.items))
-  }, [secteur, priorite, dmax, home])
+    let active = true
+    setLoadError('')
+    api.companies({ secteur: secteur ? [secteur] : [], priorite, dmax: dmax || undefined, sort: home ? 'distance' : 'score', limit: 500 })
+      .then((r) => { if (active) setItems(r.items) })
+      .catch((error) => { if (active) setLoadError(error.message || 'Impossible de charger les entreprises.') })
+    return () => { active = false }
+  }, [secteur, priorite, dmax, home, reloadItems])
 
   useEffect(() => {
     if (map.current) return
@@ -62,15 +69,16 @@ export default function MapPage() {
       const r = await api.geocode(adresse.trim())
       await setHome({ lat: r.lat, lon: r.lon, label: adresse.trim() })
     } catch (e) {
-      notify(e.message)
+      notify(e.message, 'error')
+    } finally {
+      setBusy(false)
     }
-    setBusy(false)
   }
   const gps = () => {
-    if (!navigator.geolocation) return notify('Géolocalisation non disponible dans ce navigateur')
+    if (!navigator.geolocation) return notify('Géolocalisation non disponible dans ce navigateur', 'error')
     navigator.geolocation.getCurrentPosition(
       (p) => setHome({ lat: p.coords.latitude, lon: p.coords.longitude, label: 'Ma position' }),
-      () => notify('Position refusée ou indisponible'),
+      () => notify('Position refusée ou indisponible', 'error'),
     )
   }
   const selected = items.find((c) => c.id === sel)
@@ -139,6 +147,12 @@ export default function MapPage() {
 
         <div className="space-y-5">
           <div ref={mapEl} className="card z-0 h-[460px] overflow-hidden" role="region" aria-label="Carte des entreprises" />
+          {loadError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-[13px] text-red-700">
+              <p role="alert">{loadError}</p>
+              <button type="button" className="mt-2 font-semibold underline" onClick={() => setReloadItems((attempt) => attempt + 1)}>Réessayer</button>
+            </div>
+          )}
           {selected && (
             <div className="card flex flex-wrap items-center gap-4 p-4">
               <MapPin className="text-primary" />

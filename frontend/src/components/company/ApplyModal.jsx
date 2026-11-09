@@ -280,6 +280,8 @@ export default function ApplyModal({
       const updated = await updateTracking(result.id, { statut: 'Candidature envoyée' }, 'Candidature marquée comme envoyée')
       if (updated) setSent(true)
       else setErr('Impossible de mettre à jour le suivi. Réessayez.')
+    } catch (error) {
+      setErr(error.message || 'Impossible de mettre à jour le suivi. Réessayez.')
     } finally {
       setBusy(false)
     }
@@ -368,6 +370,7 @@ export default function ApplyModal({
                 onClick={() => {
                   const popup = window.open('/api/google/connect', 'bookjob-google-oauth', 'popup,width=520,height=680')
                   if (!popup) setErr('Autorisez les fenêtres pop-up pour connecter Gmail.')
+                  else setErr('')
                 }}
               >
                 {gmailStatus?.connected ? 'Renouveler Gmail' : 'Connecter Gmail'}

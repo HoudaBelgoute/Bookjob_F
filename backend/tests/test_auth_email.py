@@ -508,6 +508,32 @@ def test_application_sent_emails_returns_persistent_message_details(monkeypatch)
     assert response == {"items": sent}
 
 
+def test_reset_tracking_clears_application_data_and_related_history(monkeypatch, tmp_path):
+    cv_dir = tmp_path / "cvs"
+    cv_dir.mkdir()
+    (cv_dir / "application.pdf").write_bytes(b"%PDF-1.4 test")
+    row = {column: "" for column in C.COLS}
+    row.update(ID="EXT-TEST", Fichier_CV="application.pdf")
+    state = {"tracking": pd.DataFrame([row], columns=C.COLS), "saved": None, "cleared": None}
+    monkeypatch.setattr(C, "CV_SENT_DIR", cv_dir)
+    monkeypatch.setattr(C, "user_path", lambda path: path)
+    monkeypatch.setattr(C, "current_user_id", lambda: "test-user")
+    monkeypatch.setattr(main.S, "load_tracking", lambda: state["tracking"].copy(deep=True))
+    monkeypatch.setattr(main.S, "save_tracking", lambda data: state.update(saved=data.copy(deep=True)))
+    monkeypatch.setattr(
+        main.accounts,
+        "clear_tracking_history",
+        lambda user_id, tracking_ids: state.update(cleared=(user_id, tracking_ids)),
+    )
+
+    response = main.reset_tracking()
+
+    assert response == {"ok": True}
+    assert state["saved"].empty
+    assert state["cleared"] == ("test-user", ["EXT-TEST"])
+    assert not (cv_dir / "application.pdf").exists()
+
+
 def test_gmail_success_remains_explicit_when_trace_storage_fails(monkeypatch, tmp_path):
     state = _configure_direct_send(monkeypatch, tmp_path)
 

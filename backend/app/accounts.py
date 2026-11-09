@@ -285,6 +285,28 @@ def status_events(user_id: str, tracking_id: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def clear_tracking_history(user_id: str | None, tracking_ids: list[str]) -> None:
+    if not user_id or not tracking_ids:
+        return
+    with _connect() as connection:
+        connection.execute(
+            "DELETE FROM application_events WHERE user_id = %s AND tracking_id = ANY(%s)",
+            (user_id, tracking_ids),
+        )
+        connection.execute(
+            "DELETE FROM email_messages WHERE user_id = %s AND tracking_id = ANY(%s)",
+            (user_id, tracking_ids),
+        )
+        connection.execute(
+            "DELETE FROM application_email_sends WHERE user_id = %s AND tracking_id = ANY(%s)",
+            (user_id, tracking_ids),
+        )
+        connection.execute(
+            "DELETE FROM automatic_followups WHERE user_id = %s AND tracking_id = ANY(%s)",
+            (user_id, tracking_ids),
+        )
+
+
 def save_email_message(user_id: str, message: dict) -> bool:
     with _connect() as connection:
         cursor = connection.execute(

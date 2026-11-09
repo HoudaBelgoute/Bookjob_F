@@ -30,15 +30,23 @@ export default function SettingsPage() {
       await refreshCompanies()
       notify(`${r.geocoded} adresses géocodées (${r.failed} échecs)`)
     } catch (e) {
-      notify(e.message)
+      notify(e.message, 'error')
+    } finally {
+      setBusy(false)
     }
-    setBusy(false)
   }
   const reset = async () => {
     if (!confirm('Supprimer TOUT le suivi et les CV joints ? Action irréversible.')) return
-    await api.resetTracking()
-    await refreshTracking()
-    notify('Suivi réinitialisé')
+    setBusy(true)
+    try {
+      await api.resetTracking()
+      await refreshTracking()
+      notify('Suivi réinitialisé')
+    } catch (e) {
+      notify(e.message || 'Impossible de réinitialiser le suivi.', 'error')
+    } finally {
+      setBusy(false)
+    }
   }
   const signOutAll = async () => {
     if (!confirm('Se déconnecter de BookJob ? Tes données et ton compte Gmail resteront associés à ton compte.')) return
@@ -46,7 +54,7 @@ export default function SettingsPage() {
     try {
       await authSignOut()
     } catch (e) {
-      notify(e.message)
+      notify(e.message, 'error')
     } finally {
       setBusy(false)
     }
@@ -92,10 +100,10 @@ export default function SettingsPage() {
 
       <section className="card mt-5 p-6">
         <h2 className="text-[18px] font-medium">Mes données</h2>
-        <p className="mt-1 text-[13px] text-muted">Ton compte et tes sessions sont enregistrés dans la base SQLite du serveur. Le profil, le suivi, les préférences et les CV restent dans ton espace privé sur le serveur.</p>
+        <p className="mt-1 text-[13px] text-muted">Ton compte, tes sessions, ton profil, ton suivi, tes préférences et tes CV sont conservés dans ton espace privé sur le serveur.</p>
         <div className="mt-4 flex flex-wrap gap-3">
           <a className="btn-outline" href={exportUrl}>Exporter le suivi (CSV)</a>
-          <button className="btn-outline !text-red-600" onClick={reset}>Réinitialiser le suivi</button>
+          <button type="button" className="btn-outline !text-red-600" disabled={busy} onClick={reset}>{busy ? 'Enregistrement…' : 'Réinitialiser le suivi'}</button>
         </div>
       </section>
 

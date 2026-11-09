@@ -240,7 +240,10 @@ export default function Applications() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="btn-outline" onClick={() => window.open('/api/google/connect', 'bookjob-google-oauth', 'popup,width=520,height=680')}>
+            <button className="btn-outline" onClick={() => {
+              const popup = window.open('/api/google/connect', 'bookjob-google-oauth', 'popup,width=520,height=680')
+              if (!popup) setEmailSyncError('Autorisez les fenêtres pop-up pour connecter ou renouveler Gmail.')
+            }}>
               {emailSync?.gmail?.connected ? 'Renouveler Gmail' : 'Connecter Gmail'}
             </button>
             <button className="btn-primary" disabled={emailSyncBusy || !emailSync?.gmail?.connected || !emailSync.gmail.read_authorized} onClick={synchronizeEmails}>
