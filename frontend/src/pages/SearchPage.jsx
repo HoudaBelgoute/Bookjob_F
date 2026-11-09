@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { Bell, Bookmark, Briefcase, Check, ChevronRight, MapPin, Search, Star, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import CompanyDetail from '../components/company/CompanyDetail'
 import ApplyModal from '../components/company/ApplyModal'
@@ -28,6 +28,7 @@ const toggle = (list, v) => (list.includes(v) ? list.filter((x) => x !== v) : [.
 
 export default function SearchPage() {
   const { meta, favorites, toggleFavorite, activeCompanyId, openCompany, addAlert, home, profile } = useStore()
+  const navigate = useNavigate()
   const [params] = useSearchParams()
   const [draftQ, setDraftQ] = useState(params.get('q') || '')
   const [f, setF] = useState({ ...DEFAULTS, q: params.get('q') || '' })
@@ -221,7 +222,17 @@ export default function SearchPage() {
                       </span>
                       <div className="flex items-center gap-3">
                         <button onClick={(e) => { e.stopPropagation(); setApplyFor(c) }} className="btn-primary !px-3 !py-2 text-[12px]">Postuler</button>
-                        <span className="flex items-center gap-1 text-[14px] font-medium text-primary">Détails <ChevronRight size={16} /></span>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            navigate(`/entreprises/${encodeURIComponent(c.id)}`)
+                          }}
+                          className="flex items-center gap-1 rounded-lg px-2 py-2 text-[14px] font-medium text-primary transition hover:bg-primary-soft"
+                          aria-label={`Voir les détails de ${c.short}`}
+                        >
+                          Détails <ChevronRight size={16} />
+                        </button>
                       </div>
                     </div>
                   </article>
