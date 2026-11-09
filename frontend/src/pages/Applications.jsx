@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Bell, ChevronRight, Clock, Download, ExternalLink, FileText, Mail, MoreHorizontal, Plus, RefreshCw } from 'lucide-react'
+import { Bell, CalendarDays, Check, ChevronRight, Clock, Download, ExternalLink, FileText, Mail, MoreHorizontal, Plus, RefreshCw, Sparkles, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, cvUrl, exportUrl } from '../api'
@@ -10,6 +10,19 @@ import { fmtDate, STATUS_DOT } from '../data/data'
 import { useStore } from '../store/useStore'
 
 const field = 'mt-1.5 w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-[14px] font-normal outline-none focus:border-primary'
+const REVIEW_STATUSES = ['En cours de traitement', 'Entretien programmé', 'Acceptée', 'Refusée']
+
+function suggestedReviewStatus(classification) {
+  return REVIEW_STATUSES.includes(classification) ? classification : 'En cours de traitement'
+}
+
+function formatEmailDate(value) {
+  if (!value) return 'Date inconnue'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
+}
 
 function Card({ app, statuts, onMenu, menuOpen, onMove, onRemove, onEdit, onOpen, onDetails }) {
   const idx = statuts.indexOf(app.statut)
@@ -78,6 +91,7 @@ export default function Applications() {
   const [automaticFollowupBusy, setAutomaticFollowupBusy] = useState(false)
   const [emailSyncError, setEmailSyncError] = useState('')
   const [reviewChoices, setReviewChoices] = useState({})
+  const [reviewBusyId, setReviewBusyId] = useState('')
 
   const visible = tracking.filter((a) => (
     (filter === 'all' || a.statut === filter)
@@ -162,15 +176,25 @@ export default function Applications() {
   const resolveEmailReview = async (message) => {
     const choice = reviewChoices[message.message_id] || {}
     const trackingId = choice.tracking_id || tracking[0]?.id
-    const status = choice.status || message.classification
-    if (!trackingId || !['En cours de traitement', 'Entretien programmé', 'Acceptée', 'Refusée'].includes(status)) return
+    const status = choice.status || suggestedReviewStatus(message.classification)
+    if (!trackingId) {
+      setEmailSyncError('Ajoutez d’abord une candidature au suivi avant d’associer une réponse.')
+      return
+    }
+    if (!REVIEW_STATUSES.includes(status)) {
+      setEmailSyncError('Le statut choisi pour cette réponse est invalide.')
+      return
+    }
     setEmailSyncError('')
+    setReviewBusyId(message.message_id)
     try {
       await api.resolveEmailSyncReview(message.message_id, { tracking_id: trackingId, status })
       await refreshEmailSync()
       await refreshTracking()
     } catch (error) {
       setEmailSyncError(error.message || 'Impossible de confirmer cette association.')
+    } finally {
+      setReviewBusyId('')
     }
   }
 
@@ -264,29 +288,66 @@ export default function Applications() {
           </label>
         </div>
         {emailReviews.length > 0 && (
-          <div className="mt-5 border-t border-line pt-4">
-            <h3 className="text-[14px] font-semibold">E-mails à associer manuellement ({emailReviews.length})</h3>
-            <ul className="mt-3 space-y-3">
+          <div className="mt-5 border-t border-line pt-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[16px] font-semibold text-ink">À vérifier et associer</h3>
+                <p className="mt-1 text-[12px] text-muted">Confirmez à quelle candidature chaque réponse correspond.</p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-soft px-3 py-1.5 text-[12px] font-semibold text-gold-ink">
+                <Mail size={14} />{emailReviews.length} e-mail{emailReviews.length === 1 ? '' : 's'} en attente
+              </span>
+            </div>
+            <ul className="mt-4 grid gap-4 xl:grid-cols-2">
               {emailReviews.map((message) => {
                 const choice = reviewChoices[message.message_id] || {}
-                const suggestedStatus = ['En cours de traitement', 'Entretien programmé', 'Acceptée', 'Refusée'].includes(message.classification) ? message.classification : 'En cours de traitement'
+                const suggestedStatus = suggestedReviewStatus(message.classification)
+                const senderName = message.sender?.match(/^(.+?)\s*<[^>]+>$/)?.[1]?.replaceAll('"', '').trim()
+                const senderAddress = message.sender?.match(/<([^>]+)>$/)?.[1] || message.sender
+                const senderInitial = (senderName || senderAddress || '?').slice(0, 1).toUpperCase()
                 return (
-                  <li key={message.message_id} className="rounded-xl border border-line p-3">
-                    <p className="text-[13px] font-semibold">{message.subject || '(sans objet)'}</p>
-                    <p className="mt-0.5 text-[11px] text-muted">{message.sender} · {message.received_at} · suggestion : {message.classification}</p>
-                    {message.snippet && <p className="mt-2 line-clamp-3 text-[12px] text-muted">{message.snippet}</p>}
-                    <div className="mt-3 flex flex-wrap items-end gap-3">
-                      <label className="text-[12px] font-semibold">Candidature
-                        <select value={choice.tracking_id || tracking[0]?.id || ''} onChange={(event) => setReviewChoices({ ...reviewChoices, [message.message_id]: { ...choice, tracking_id: event.target.value } })} className="mt-1 block max-w-[280px] rounded-lg border border-line bg-white px-3 py-2 text-[12px]">
-                          {tracking.map((application) => <option key={application.id} value={application.id}>{application.short} — {application.poste || 'Poste non précisé'}</option>)}
-                        </select>
-                      </label>
-                      <label className="text-[12px] font-semibold">Statut à appliquer
-                        <select value={choice.status || suggestedStatus} onChange={(event) => setReviewChoices({ ...reviewChoices, [message.message_id]: { ...choice, status: event.target.value } })} className="mt-1 block rounded-lg border border-line bg-white px-3 py-2 text-[12px]">
-                          {['En cours de traitement', 'Entretien programmé', 'Acceptée', 'Refusée'].map((status) => <option key={status}>{status}</option>)}
-                        </select>
-                      </label>
-                      <button className="btn-outline !py-2" disabled={!tracking.length} onClick={() => resolveEmailReview(message)}>Confirmer l’association</button>
+                  <li key={message.message_id} className="group overflow-hidden rounded-2xl border border-line bg-white shadow-card transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop">
+                    <div className="border-b border-line bg-gradient-to-r from-primary-soft/70 via-white to-white p-4 sm:p-5">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary shadow-card ring-1 ring-line">
+                          {senderInitial === '?' ? <UserRound size={20} /> : <span className="text-[15px] font-bold">{senderInitial}</span>}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="min-w-0 break-all text-[13px] font-semibold text-ink">{senderName || senderAddress || 'Expéditeur inconnu'}</p>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-gold-soft px-2.5 py-1 text-[10px] font-semibold text-gold-ink">
+                              <Sparkles size={12} />À vérifier
+                            </span>
+                          </div>
+                          {senderName && <p className="mt-0.5 break-all text-[11px] text-muted">{senderAddress}</p>}
+                          <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
+                            <CalendarDays size={13} />{formatEmailDate(message.received_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <h4 className="mt-4 break-words text-[15px] font-semibold leading-snug text-navy-900">{message.subject || '(sans objet)'}</h4>
+                      {message.snippet && (
+                        <p className="mt-2 line-clamp-3 rounded-xl border border-line/70 bg-white/80 px-3.5 py-3 text-[12px] leading-relaxed text-muted">
+                          {message.snippet}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-3 p-4 sm:p-5">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block text-[11px] font-semibold uppercase tracking-wide text-muted">Candidature concernée
+                          <select value={choice.tracking_id || tracking[0]?.id || ''} onChange={(event) => setReviewChoices({ ...reviewChoices, [message.message_id]: { ...choice, tracking_id: event.target.value } })} className="mt-1.5 block w-full min-w-0 rounded-xl border border-line bg-white px-3 py-2.5 text-[12px] font-medium normal-case tracking-normal text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" disabled={!tracking.length}>
+                            {tracking.map((application) => <option key={application.id} value={application.id}>{application.short} — {application.poste || 'Poste non précisé'}</option>)}
+                          </select>
+                        </label>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wide text-muted">Statut suggéré
+                          <select value={choice.status || suggestedStatus} onChange={(event) => setReviewChoices({ ...reviewChoices, [message.message_id]: { ...choice, status: event.target.value } })} className="mt-1.5 block w-full rounded-xl border border-line bg-white px-3 py-2.5 text-[12px] font-medium normal-case tracking-normal text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10">
+                            {REVIEW_STATUSES.map((status) => <option key={status}>{status}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                      <button type="button" className="btn-primary flex w-full justify-center !py-2.5" disabled={!tracking.length || reviewBusyId === message.message_id} onClick={() => resolveEmailReview(message)}>
+                        <Check size={16} />{reviewBusyId === message.message_id ? 'Association…' : 'Confirmer l’association'}
+                      </button>
                     </div>
                   </li>
                 )
