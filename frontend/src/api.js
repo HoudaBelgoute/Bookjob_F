@@ -60,6 +60,7 @@ export const api = {
   tracking: () => req('/tracking'),
   trackingEvents: (id) => req(`/tracking/${encodeURIComponent(id)}/events`),
   trackingEmails: (id) => req(`/tracking/${encodeURIComponent(id)}/emails`),
+  trackingSentEmails: (id) => req(`/tracking/${encodeURIComponent(id)}/sent-emails`),
   applicationSendStatus: (id) => req(`/tracking/${encodeURIComponent(id)}/send-status`),
   addTracking: (b) => req('/tracking', { method: 'POST', body: b }),
   patchTracking: (id, b) => req(`/tracking/${encodeURIComponent(id)}`, { method: 'PATCH', body: b }),

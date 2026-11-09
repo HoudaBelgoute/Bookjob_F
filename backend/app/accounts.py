@@ -8,6 +8,7 @@ import json
 import logging
 import secrets
 import time
+from urllib.parse import quote
 
 import pandas as pd
 from psycopg.errors import UniqueViolation
@@ -313,6 +314,53 @@ def email_messages(user_id: str, *, reviews_only: bool = False) -> list[dict]:
             (user_id,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def save_application_email_send(user_id: str, message: dict) -> bool:
+    with _connect() as connection:
+        cursor = connection.execute(
+            """INSERT INTO application_email_sends
+               (user_id, tracking_id, message_id, sender, recipient, subject, body, attachments, sent_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT (user_id, message_id) DO NOTHING""",
+            (
+                user_id, message["tracking_id"], message["message_id"], message["sender"],
+                message["recipient"], message["subject"], message["body"],
+                json.dumps(message["attachments"], ensure_ascii=False), message["sent_at"],
+            ),
+        )
+        return cursor.rowcount == 1
+
+
+def application_email_sends(user_id: str, tracking_id: str) -> list[dict]:
+    with _connect() as connection:
+        rows = connection.execute(
+            """SELECT tracking_id, message_id, sender, recipient, subject, body, attachments, sent_at
+               FROM application_email_sends
+               WHERE user_id = %s AND tracking_id = %s
+               ORDER BY sent_at DESC""",
+            (user_id, tracking_id),
+        ).fetchall()
+    messages = []
+    for row in rows:
+        message = dict(row)
+        try:
+            message["attachments"] = json.loads(message["attachments"])
+        except (TypeError, json.JSONDecodeError):
+            log.exception("Pièces jointes invalides dans la trace d'envoi Gmail")
+            raise
+        message["gmail_url"] = gmail_sent_message_url(message["sender"], message["message_id"])
+        messages.append(message)
+    return messages
+
+
+def gmail_sent_message_url(sender: str, message_id: str) -> str:
+    return (
+        "https://mail.google.com/mail/?authuser="
+        + quote(sender, safe="")
+        + "#sent/"
+        + quote(message_id, safe="")
+    )
 
 
 def resolve_email_review(user_id: str, message_id: str, tracking_id: str, status: str) -> bool:

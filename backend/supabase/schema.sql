@@ -45,6 +45,21 @@ CREATE TABLE IF NOT EXISTS email_messages (
     PRIMARY KEY (user_id, message_id)
 );
 
+CREATE TABLE IF NOT EXISTS application_email_sends (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tracking_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    sender TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    attachments TEXT NOT NULL DEFAULT '[]',
+    sent_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, message_id)
+);
+CREATE INDEX IF NOT EXISTS application_email_sends_tracking_idx
+    ON application_email_sends(user_id, tracking_id, sent_at DESC);
+
 CREATE TABLE IF NOT EXISTS email_sync_state (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     last_checked TEXT,
@@ -101,6 +116,7 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE application_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE application_email_sends ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_sync_state ENABLE ROW LEVEL SECURITY;
 ALTER TABLE automatic_followups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmation_owners ENABLE ROW LEVEL SECURITY;

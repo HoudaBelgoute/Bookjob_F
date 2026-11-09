@@ -19,6 +19,8 @@ from html import escape
 from urllib.parse import quote, urlencode
 
 import pandas as pd
+import psycopg
+from psycopg_pool import PoolTimeout
 from a2wsgi import WSGIMiddleware
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -849,6 +851,12 @@ def send_application(
         raise HTTPException(400, "Le message de candidature est obligatoire.")
 
     with _EMAIL_LOCK:
+        user_id = C.current_user_id()
+        if user_id and accounts.application_email_sends(user_id, tid):
+            raise HTTPException(
+                409,
+                "Un e-mail est déjà enregistré comme envoyé pour cette candidature. Consulte l’historique avant toute nouvelle tentative.",
+            )
         d = S.load_tracking()
         matches = d.index[d.ID == tid]
         if len(matches) == 0:
@@ -885,22 +893,72 @@ def send_application(
                 (C.user_path(C.CV_SENT_DIR) / letter_filename).unlink(missing_ok=True)
             raise
 
+        sent_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        attachments = [
+            item.get_filename()
+            for item in message.iter_attachments()
+            if item.get_filename()
+        ]
+        trace_saved = False
+        warnings = []
+        if user_id:
+            try:
+                trace_saved = accounts.save_application_email_send(user_id, {
+                    "tracking_id": tid,
+                    "message_id": gmail_message_id,
+                    "sender": email_status["sender"],
+                    "recipient": recipient,
+                    "subject": subject,
+                    "body": body.strip(),
+                    "attachments": attachments,
+                    "sent_at": sent_at,
+                })
+            except (psycopg.Error, PoolTimeout):
+                _LOGGER.exception("L'e-mail a été envoyé par Gmail mais sa trace n'a pas été enregistrée")
+                warnings.append(
+                    "Gmail a envoyé le message, mais BookJob n'a pas pu enregistrer sa trace. "
+                    "Ne le renvoie pas ; vérifie le lien Gmail."
+                )
+        else:
+            warnings.append("Aucun compte BookJob connecté : la trace ne peut pas être conservée dans l'historique.")
+        if user_id and not trace_saved and not warnings:
+            warnings.append("La trace de cet envoi n'a pas été enregistrée dans l'historique BookJob.")
+
         sent_date = str(date.today())
         d.loc[index, ["Email_contact", "Statut", "Date_candidature", "Date_relance", "Date_modification"]] = [
             recipient, "Candidature envoyée", sent_date, S.default_relance(sent_date),
-            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            sent_at,
         ]
-        S.save_tracking(d)
-        _record_status_change(
-            tid, old_status, "Candidature envoyée", "email_send",
-            f"Envoi Gmail confirmé pour {recipient}.",
-        )
+        tracking_saved = True
+        try:
+            S.save_tracking(d)
+        except (psycopg.Error, PoolTimeout):
+            _LOGGER.exception("L'e-mail est envoyé et archivé, mais le statut du suivi n'a pas été mis à jour")
+            tracking_saved = False
+            warnings.append("Gmail a envoyé le message, mais le statut de la candidature n'a pas été mis à jour.")
+        if tracking_saved:
+            try:
+                _record_status_change(
+                    tid, old_status, "Candidature envoyée", "email_send",
+                    f"Envoi Gmail confirmé pour {recipient}, objet « {subject} », message Gmail {gmail_message_id}.",
+                )
+            except (psycopg.Error, PoolTimeout):
+                _LOGGER.exception("La trace Gmail existe mais l'événement de statut n'a pas été enregistré")
+                warnings.append("L'e-mail est archivé, mais l'événement n'a pas été ajouté à l'historique des statuts.")
         return {
             "ok": True,
             "sent": True,
             "message_id": gmail_message_id,
+            "gmail_url": accounts.gmail_sent_message_url(email_status["sender"], gmail_message_id),
             "sender": email_status["sender"],
             "recipient": recipient,
+            "subject": subject,
+            "body": body.strip(),
+            "attachments": attachments,
+            "sent_at": sent_at,
+            "trace_saved": trace_saved,
+            "tracking_saved": tracking_saved,
+            "warning": " ".join(warnings),
             "message": f"La candidature a été envoyée à {recipient}.",
         }
 
@@ -1843,6 +1901,17 @@ def application_emails(tid: str):
     user_id = C.current_user_id()
     items = accounts.email_messages(user_id or "")
     return {"items": [item for item in items if item["tracking_id"] == tid]}
+
+
+@app.get("/api/tracking/{tid}/sent-emails")
+def application_sent_emails(tid: str):
+    d = S.load_tracking()
+    if not (d.ID == tid).any():
+        raise HTTPException(404, "Candidature introuvable")
+    user_id = C.current_user_id()
+    if not user_id:
+        return {"items": []}
+    return {"items": accounts.application_email_sends(user_id, tid)}
 
 
 class EmailReviewIn(BaseModel):

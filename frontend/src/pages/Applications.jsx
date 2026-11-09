@@ -481,16 +481,18 @@ function EditModal({ app, onClose }) {
 function DetailsModal({ app, onClose }) {
   const [events, setEvents] = useState([])
   const [emails, setEmails] = useState([])
+  const [sentEmails, setSentEmails] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
-    Promise.all([api.trackingEvents(app.id), api.trackingEmails(app.id)])
-      .then(([history, messages]) => {
+    Promise.all([api.trackingEvents(app.id), api.trackingEmails(app.id), api.trackingSentEmails(app.id)])
+      .then(([history, messages, sentMessages]) => {
         if (!active) return
         setEvents(history.items)
         setEmails(messages.items)
+        setSentEmails(sentMessages.items)
       })
       .catch((err) => {
         if (active) setError(err.message || 'Impossible de charger les détails.')
@@ -534,7 +536,29 @@ function DetailsModal({ app, onClose }) {
               )}
             </section>
             <section>
-              <h3 className="mb-2 text-[14px] font-semibold">E-mails associés</h3>
+              <h3 className="mb-2 text-[14px] font-semibold">E-mails envoyés depuis BookJob</h3>
+              {sentEmails.length === 0 ? <p className="text-[13px] text-muted">Aucun envoi Gmail enregistré pour cette candidature.</p> : (
+                <ul className="space-y-3">
+                  {sentEmails.map((email) => (
+                    <li key={email.message_id} className="rounded-lg border border-success/30 bg-success-soft p-3 text-[13px]">
+                      <p className="font-semibold">{email.subject || '(sans objet)'}</p>
+                      <p className="mt-1 text-[12px] text-muted">De : {email.sender} · À : {email.recipient}</p>
+                      <p className="text-[12px] text-muted">Enregistré le {new Date(email.sent_at).toLocaleString()}</p>
+                      {email.attachments.length > 0 && <p className="mt-1 text-[12px]">Pièces jointes : {email.attachments.join(', ')}</p>}
+                      <details className="mt-2">
+                        <summary className="cursor-pointer font-semibold">Voir le contenu envoyé</summary>
+                        <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-white/70 p-2 font-sans">{email.body}</pre>
+                      </details>
+                      <a href={email.gmail_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 font-semibold text-primary hover:underline">
+                        <ExternalLink size={14} />Ouvrir le message dans Gmail · Envoyés
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h3 className="mb-2 text-[14px] font-semibold">E-mails reçus et associés</h3>
               {emails.length === 0 ? <p className="text-[13px] text-muted">Aucun e-mail de recrutement associé.</p> : (
                 <ul className="space-y-2">
                   {emails.map((email) => (

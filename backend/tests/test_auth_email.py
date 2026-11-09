@@ -3,6 +3,7 @@ import re
 from io import BytesIO
 
 import pandas as pd
+import psycopg
 import pytest
 from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
@@ -71,6 +72,30 @@ def test_tracking_and_email_history_are_isolated_between_accounts(monkeypatch, t
     })
     assert created.status_code == 200
     tracking_id = created.json()["id"]
+    first_user_id = accounts.resolve_session(first.cookies.get(C.SESSION_COOKIE_NAME))["id"]
+    accounts.save_application_email_send(first_user_id, {
+        "tracking_id": tracking_id,
+        "message_id": "gmail-sent-message",
+        "sender": "first@gmail.com",
+        "recipient": "recruitment@example.com",
+        "subject": "Application",
+        "body": "Hello, my CV is attached.",
+        "attachments": ["cv.pdf"],
+        "sent_at": "2026-11-09T14:00:00+00:00",
+    })
+    sent_history = first.get(f"/api/tracking/{tracking_id}/sent-emails")
+    assert sent_history.status_code == 200
+    assert sent_history.json()["items"] == [{
+        "tracking_id": tracking_id,
+        "message_id": "gmail-sent-message",
+        "sender": "first@gmail.com",
+        "recipient": "recruitment@example.com",
+        "subject": "Application",
+        "body": "Hello, my CV is attached.",
+        "attachments": ["cv.pdf"],
+        "sent_at": "2026-11-09T14:00:00+00:00",
+        "gmail_url": "https://mail.google.com/mail/?authuser=first%40gmail.com#sent/gmail-sent-message",
+    }]
     assert second.post("/api/auth/register", json={
         "full_name": "Second Candidate",
         "email": "second@example.com", "password": "correct-horse-password",
@@ -81,6 +106,7 @@ def test_tracking_and_email_history_are_isolated_between_accounts(monkeypatch, t
     assert all(item["id"] != tracking_id for item in second.get("/api/tracking").json()["items"])
     assert second.get(f"/api/tracking/{tracking_id}/events").status_code == 404
     assert second.get(f"/api/tracking/{tracking_id}/emails").status_code == 404
+    assert second.get(f"/api/tracking/{tracking_id}/sent-emails").status_code == 404
 
 
 def test_two_account_spaces_isolate_favorites_applications_and_cvs(monkeypatch, tmp_path):
@@ -333,9 +359,19 @@ def _configure_direct_send(monkeypatch, tmp_path, *, send=None):
         Statut="À envoyer",
         Fichier_CV="application.pdf",
     )
-    state = {"tracking": pd.DataFrame([row], columns=C.COLS), "events": [], "messages": []}
+    state = {"tracking": pd.DataFrame([row], columns=C.COLS), "events": [], "messages": [], "sent_emails": []}
     monkeypatch.setattr(C, "user_path", lambda path: path)
+    monkeypatch.setattr(C, "current_user_id", lambda: "test-user")
     monkeypatch.setattr(C, "CV_SENT_DIR", cv_dir)
+    monkeypatch.setattr(main.accounts, "application_email_sends", lambda _user_id, _tid: state["sent_emails"])
+    monkeypatch.setattr(
+        main.accounts,
+        "save_application_email_send",
+        lambda _user_id, email: state["sent_emails"].append({
+            **email,
+            "gmail_url": main.accounts.gmail_sent_message_url(email["sender"], email["message_id"]),
+        }) or True,
+    )
     monkeypatch.setattr(main.S, "load_tracking", lambda: state["tracking"].copy(deep=True))
     monkeypatch.setattr(main.S, "save_tracking", lambda updated: state.update(tracking=updated.copy(deep=True)))
     monkeypatch.setattr(main.S, "default_relance", lambda _: "2026-10-21")
@@ -398,13 +434,32 @@ def test_application_is_sent_directly_and_tracking_updates_only_after_gmail_succ
         "Nous recherchons des compétences Python et analyse de données.", None,
     )
 
-    assert response == {
+    assert {key: value for key, value in response.items() if key != "sent_at"} == {
         "ok": True, "sent": True,
+        "message_id": "sent-message-123",
+        "gmail_url": "https://mail.google.com/mail/?authuser=sender%40gmail.com#sent/sent-message-123",
+        "sender": "sender@gmail.com",
+        "recipient": "recrutement@example.com",
+        "subject": "Candidature stage Data",
+        "body": "Bonjour, voici ma candidature.",
+        "attachments": ["application.pdf", "lettre_motivation.txt"],
+        "trace_saved": True,
+        "tracking_saved": True,
+        "warning": "",
+        "message": "La candidature a été envoyée à recrutement@example.com.",
+    }
+    assert response["sent_at"].endswith("+00:00")
+    assert state["sent_emails"] == [{
+        "tracking_id": "EXT-TEST",
         "message_id": "sent-message-123",
         "sender": "sender@gmail.com",
         "recipient": "recrutement@example.com",
-        "message": "La candidature a été envoyée à recrutement@example.com.",
-    }
+        "subject": "Candidature stage Data",
+        "body": "Bonjour, voici ma candidature.",
+        "attachments": ["application.pdf", "lettre_motivation.txt"],
+        "sent_at": response["sent_at"],
+        "gmail_url": "https://mail.google.com/mail/?authuser=sender%40gmail.com#sent/sent-message-123",
+    }]
     assert len(state["messages"]) == 1
     application = state["messages"][0]
     assert application["To"] == "recrutement@example.com"
@@ -415,6 +470,62 @@ def test_application_is_sent_directly_and_tracking_updates_only_after_gmail_succ
     assert state["tracking"].iloc[0]["Statut"] == "Candidature envoyée"
     assert state["tracking"].iloc[0]["Email_contact"] == "recrutement@example.com"
     assert state["events"][0][1:3] == ("À envoyer", "Candidature envoyée")
+
+    with pytest.raises(HTTPException) as exc_info:
+        main.send_application(
+            "EXT-TEST", "recrutement@example.com", "Candidature stage Data",
+            "Bonjour, voici ma candidature.", "", "Stage Data", "", "", None,
+        )
+    assert exc_info.value.status_code == 409
+    assert len(state["messages"]) == 1
+
+
+def test_application_sent_emails_returns_persistent_message_details(monkeypatch):
+    sent = [{
+        "message_id": "sent-message-123",
+        "sender": "sender@gmail.com",
+        "recipient": "recrutement@example.com",
+        "subject": "Candidature stage Data",
+        "body": "Bonjour, voici ma candidature.",
+        "attachments": ["application.pdf"],
+        "sent_at": "2026-11-09T14:00:00+00:00",
+        "gmail_url": "https://mail.google.com/mail/?authuser=sender%40gmail.com#sent/sent-message-123",
+    }]
+    monkeypatch.setattr(C, "current_user_id", lambda: "test-user")
+    monkeypatch.setattr(
+        main.S,
+        "load_tracking",
+        lambda: pd.DataFrame([{"ID": "EXT-TEST"}]),
+    )
+    monkeypatch.setattr(
+        main.accounts,
+        "application_email_sends",
+        lambda user_id, tracking_id: sent if (user_id, tracking_id) == ("test-user", "EXT-TEST") else [],
+    )
+
+    response = main.application_sent_emails("EXT-TEST")
+
+    assert response == {"items": sent}
+
+
+def test_gmail_success_remains_explicit_when_trace_storage_fails(monkeypatch, tmp_path):
+    state = _configure_direct_send(monkeypatch, tmp_path)
+
+    def fail_trace_save(*_args):
+        raise psycopg.OperationalError("database unavailable")
+
+    monkeypatch.setattr(main.accounts, "save_application_email_send", fail_trace_save)
+
+    response = main.send_application(
+        "EXT-TEST", "recrutement@example.com", "Candidature stage Data",
+        "Bonjour, voici ma candidature.", "", "Stage Data", "", "", None,
+    )
+
+    assert response["sent"] is True
+    assert response["message_id"] == "sent-message-123"
+    assert response["trace_saved"] is False
+    assert "Gmail a envoyé le message" in response["warning"]
+    assert state["tracking"].iloc[0]["Statut"] == "Candidature envoyée"
 
 
 def test_application_send_failure_is_not_reported_as_sent(monkeypatch, tmp_path):

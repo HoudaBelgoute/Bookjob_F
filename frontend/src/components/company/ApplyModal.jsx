@@ -301,18 +301,34 @@ export default function ApplyModal({
             <p role="status" className="text-[14px] text-muted">Envoi de votre candidature en cours…</p>
           ) : sent ? (
             <div role="status" className="space-y-2 rounded-xl border border-success/30 bg-success-soft p-4 text-success">
-              <p className="font-semibold">Gmail a confirmé l’envoi à {sentDetails?.recipient || recipient}.</p>
-              <p className="text-[12px]">Compte expéditeur : {sentDetails?.sender || gmailStatus?.sender}.</p>
-              {sentDetails?.message_id && (
+              <p className="font-semibold">Gmail a confirmé l’envoi à {sentDetails?.recipient || recipient} et a créé le message dans « Envoyés ».</p>
+              <dl className="grid gap-1 text-[12px]">
+                <div><dt className="inline font-semibold">De : </dt><dd className="inline">{sentDetails?.sender || gmailStatus?.sender}</dd></div>
+                <div><dt className="inline font-semibold">À : </dt><dd className="inline">{sentDetails?.recipient || recipient}</dd></div>
+                <div><dt className="inline font-semibold">Objet : </dt><dd className="inline">{sentDetails?.subject || subject}</dd></div>
+                {sentDetails?.sent_at && <div><dt className="inline font-semibold">Date : </dt><dd className="inline">{new Date(sentDetails.sent_at).toLocaleString()}</dd></div>}
+                {sentDetails?.attachments?.length > 0 && <div><dt className="inline font-semibold">Pièces jointes : </dt><dd className="inline">{sentDetails.attachments.join(', ')}</dd></div>}
+              </dl>
+              {sentDetails?.body && (
+                <details className="text-[12px]">
+                  <summary className="cursor-pointer font-semibold">Voir le contenu envoyé</summary>
+                  <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-white/70 p-2 font-sans">{sentDetails.body}</pre>
+                </details>
+              )}
+              {sentDetails?.gmail_url && (
                 <a
                   className="inline-block underline"
-                  href={`https://mail.google.com/mail/?authuser=${encodeURIComponent(sentDetails.sender || '')}#sent/${encodeURIComponent(sentDetails.message_id)}`}
+                  href={sentDetails.gmail_url}
                   target="_blank"
                   rel="noreferrer"
                 >
                   Ouvrir le message dans Gmail · Envoyés
                 </a>
               )}
+              {sentDetails?.warning && (
+                <p className="text-[12px] font-semibold text-red-700">{sentDetails.warning}</p>
+              )}
+              <p className="text-[11px]">Cette confirmation prouve que Gmail a enregistré le message dans « Envoyés », pas qu’il a été remis ou lu par le destinataire.</p>
             </div>
           ) : confirmationRequested ? (
             <div className="space-y-3 rounded-xl border border-success/30 bg-success-soft p-4 text-[13px]">
