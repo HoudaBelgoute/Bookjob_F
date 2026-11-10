@@ -41,7 +41,7 @@ def test_google_login_creates_account_and_session(google):
 
     done = client.get("/api/google/callback", params={"code": "good-code", "state": state})
 
-    assert done.status_code == 303 and done.headers["location"] == "/"
+    assert done.status_code == 303 and done.headers["location"] == "/tableau-de-bord"
     status = client.get("/api/auth/status").json()
     assert status["authenticated"] is True
     assert status["user"]["email"] == "etudiante@gmail.com"

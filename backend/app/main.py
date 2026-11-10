@@ -234,7 +234,7 @@ def _google_login_finish(code: str, error: str) -> Response:
         _, token = accounts.login_with_google(email, name)
     except (PermissionError, ValueError, gmail.GmailError) as ex:
         return fail(str(ex))
-    response = RedirectResponse("/", status_code=303)
+    response = RedirectResponse("/tableau-de-bord", status_code=303)
     _set_session_cookie(response, token)
     return response
 
