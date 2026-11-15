@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import CompanyLogo from '../components/ui/CompanyLogo'
-import BarList from '../components/ui/BarList'
 import { TONES, fmtDate } from '../data/data'
 import { useStore } from '../store/useStore'
 
@@ -27,14 +26,12 @@ export default function Dashboard() {
   ]
   const missing = d.profil.items.filter((i) => !i.done)
   const profileDone = d.profil.percent >= 100
-  const statuts = Object.fromEntries(Object.entries(d.par_statut).filter(([, v]) => v > 0))
-
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-8 md:px-8">
       <p className="eyebrow">Tableau de bord</p>
       <h1 className="page-title mt-3">Bonjour {d.nom ? d.nom.split(' ')[0] : ''}</h1>
       <p className="mt-3 text-[16px] text-muted">Voici où en sont vos recherches de stage aujourd’hui.</p>
-      <a href="/api/dash/" className="btn-outline mt-5">Ouvrir le tableau analytique interactif</a>
+      <Link to="/statistiques" className="btn-outline mt-5">Voir les statistiques détaillées <ArrowRight size={16} /></Link>
 
       {k.relances > 0 && (
         <Link to="/candidatures" className="mt-6 block rounded-xl bg-gold-soft px-4 py-3 text-[14px] text-gold-ink">
@@ -111,12 +108,6 @@ export default function Dashboard() {
         </section>
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-3">
-        <section className="card p-6"><h2 className="mb-4 text-[18px] font-medium">Suivi par statut</h2><BarList data={statuts} /></section>
-        <section className="card p-6"><h2 className="mb-4 text-[18px] font-medium">Entreprises par secteur</h2><BarList data={d.par_secteur} color="var(--gold)" /></section>
-        <section className="card p-6"><h2 className="mb-4 text-[18px] font-medium">Score moyen par secteur</h2><BarList data={d.score_moyen_secteur} color="var(--success)" /></section>
-      </div>
-
       <section className="card mt-5 p-6">
         <div className="flex items-start justify-between">
           <div>
@@ -130,7 +121,7 @@ export default function Dashboard() {
             <Link key={c.id} to="/rechercher" onClick={() => openCompany(c.id)} className="group overflow-hidden rounded-2xl border border-line transition-shadow hover:shadow-pop">
               <div className="relative h-[116px]" style={{ background: `linear-gradient(135deg, ${(TONES[c.tone] || TONES.blue).bg}, #ffffff 140%)` }}>
                 <span className="absolute -right-6 -top-8 h-28 w-28 rounded-full opacity-60" style={{ background: (TONES[c.tone] || TONES.blue).fg, filter: 'blur(40px)' }} aria-hidden="true" />
-                <span className="absolute right-3 top-3 rounded-md bg-white/90 px-2.5 py-1 text-[13px] font-medium text-success shadow-card">{c.match != null ? `${c.match}% profil` : `Score ${c.score}`}</span>
+                <span title={c.match_explanation} className="absolute right-3 top-3 rounded-md bg-white/90 px-2.5 py-1 text-[13px] font-medium text-success shadow-card">{c.match != null ? `Indice ${c.match}/100` : `Score ${c.score}`}</span>
                 <CompanyLogo company={c} size="xl" className="absolute -bottom-8 left-5 shadow-pop ring-4 ring-white" />
               </div>
               <div className="px-5 pb-5 pt-11">
