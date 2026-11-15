@@ -54,3 +54,25 @@ def test_ai_chat_requests_clear_french_structure(monkeypatch):
     assert "paragraphes brefs" in captured["system"]
     assert "N'invente aucun fait" in captured["system"]
     assert captured["max_tokens"] == 900
+
+
+def test_chat_fallback_describes_sector_keyword_overlap_without_claiming_skill_gaps():
+    reply = ai.chat_fallback(
+        "Comment mon profil correspond à cette entreprise ?",
+        {
+            "match": 50,
+            "match_skills": ["Python"],
+            "missing_skills": ["UX design"],
+            "match_explanation": "1 compétence(s) sur 2 déclarées contiennent un mot-clé du secteur.",
+            "short": "Acme",
+            "secteur": "IT",
+        },
+        {},
+        True,
+    )
+
+    assert "50/100" in reply
+    assert "Compétences rapprochées : Python" in reply
+    assert "Compétences sans mot-clé correspondant : UX design" in reply
+    assert "ni une analyse d'offre ni une probabilité d'embauche" in reply
+    assert "À développer" not in reply

@@ -119,16 +119,21 @@ def chat_fallback(question: str, company: dict | None, profile: dict, use_profil
     q = question.lower()
     if company and any(k in q for k in ("correspond", "profil", "compatib", "match")):
         if not use_profile or company.get("match") is None:
-            return "Pour obtenir une estimation\n\nActivez « Utiliser mon profil » et renseignez vos compétences."
+            return "Pour afficher cet indice\n\nActivez « Utiliser mon profil » et renseignez vos compétences."
         ms = ", ".join(company["match_skills"]) or "aucune"
         miss = ", ".join(company["missing_skills"]) or "aucune"
-        return (f"Estimation de compatibilité\n\n{company['short']} — secteur {company['secteur']} : "
-                f"{company['match']} %.\n\n• Compétences en phase : {ms}.\n"
-                f"• À développer : {miss}.\n\nCette estimation repose sur des mots-clés ; ce n'est pas une probabilité d'embauche.")
+        explanation = company.get("match_explanation") or (
+            "Cet indice compte les compétences déclarées qui partagent un mot-clé du secteur."
+        )
+        return (f"Indice de mots-clés profil / secteur\n\n{company['short']} — secteur {company['secteur']} : "
+                f"{company['match']}/100.\n{explanation}\n\n• Compétences rapprochées : {ms}.\n"
+                f"• Compétences sans mot-clé correspondant : {miss}.\n\n"
+                "Ce n'est ni une analyse d'offre ni une probabilité d'embauche.")
     if any(k in q for k in ("manque", "compétence")):
         if company and use_profile:
-            return (f"Compétences à renforcer\n\nPour le secteur {company['secteur']} : "
-                    f"{', '.join(company['missing_skills']) or 'aucune identifiée'}.")
+            return (f"Compétences sans mot-clé correspondant\n\nPour le secteur {company['secteur']} : "
+                    f"{', '.join(company['missing_skills']) or 'aucune'}.\n"
+                    "Cela ne signifie pas que ces compétences sont inutiles ou insuffisantes.")
         return "Comparaison du profil\n\nRenseignez votre profil pour comparer vos compétences au secteur visé."
     if any(k in q for k in ("entretien", "préparer", "preparer")):
         nom = company["short"] if company else "l'entreprise"

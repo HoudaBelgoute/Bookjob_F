@@ -75,21 +75,7 @@ python -m app.pipeline.run --source jobs --source osm --source excel --out data/
 Les fichiers de données restent compatibles : `backend/data/suivi.csv` et `profil.json` sont ceux de l'app Streamlit. Au premier compte créé, les données locales historiques sont copiées dans son espace privé. Les comptes suivants partent avec leur propre profil et leur propre suivi.
 
 ## IA (optionnelle)
-Aucune clé n'est nécessaire (mode modèle). Pour activer l'IA, copiez `backend/.env.example` en `backend/.env` :
-Groq (`GROQ_API_KEY`, modèle `openai/gpt-oss-120b`), Grok (`XAI_API_KEY`, modèle `grok-4.7`), Ollama en local (aucune clé), OmniRoute (`OMNIROUTE_BASE_URL` + `OMNIROUTE_API_KEY`) ou Anthropic (`ANTHROPIC_API_KEY`).
-Pour Ollama, installez-le puis téléchargez un modèle dans un terminal :
-
-```bash
-ollama pull qwen2.5:3b
-```
-
-Copiez `backend/.env.example` en `backend/.env`. Gardez `OLLAMA_BASE_URL=http://localhost:11434` et choisissez dans `OLLAMA_MODEL` un modèle installé. Le serveur Ollama doit rester lancé pendant l'utilisation de BookJob. Les clés des fournisseurs cloud restent côté serveur. `GOOGLE_API_KEY` (optionnel) permet d'affiner les coordonnées des entreprises depuis Paramètres.
-
-Pour utiliser Groq en local, créez une clé API dans [la console Groq](https://console.groq.com/keys), puis renseignez `GROQ_API_KEY` dans `backend/.env`. Groq utilise le modèle configuré par `GROQ_MODEL` (par défaut `openai/gpt-oss-120b`) et sera prioritaire sur les autres fournisseurs. Redémarrez le backend après modification. Ne partagez jamais la clé et ne la publiez pas sur GitHub ; l'API peut être soumise à des limites ou conditions d'usage Groq.
-
-Pour utiliser Grok en local, créez une clé API dans [la console xAI](https://console.x.ai/), puis renseignez `XAI_API_KEY` dans `backend/.env`. Gardez `XAI_MODEL=grok-4.7`. Redémarrez le backend après modification ; Grok sera prioritaire sur OmniRoute, Ollama et Anthropic quand aucune clé Groq n'est configurée. Ne partagez pas cette clé et ne la publiez jamais sur GitHub. L'API xAI est payante selon l'usage et peut nécessiter des crédits sur le compte.
-
-Pour le site hébergé, configurez `XAI_API_KEY` et `XAI_MODEL` dans les variables d'environnement privées du serveur. À défaut de clé Grok, BookJob peut utiliser OmniRoute (`OMNIROUTE_BASE_URL`, `OMNIROUTE_API_KEY`, `OMNIROUTE_MODEL`), Ollama local ou Anthropic. Ne publiez jamais vos clés API dans GitHub.
+Sans clé, BookJob utilise des modèles locaux de génération et un assistant fondé sur les données disponibles. Le seul fournisseur IA distant actuellement intégré est Groq : configurez `GROQ_API_KEY` et, facultativement, `GROQ_MODEL` dans `backend/.env` en local ou dans les variables privées du serveur. La clé est partagée par l'application et reste côté serveur ; BookJob ne propose pas de stockage de clé IA personnelle par compte. Ne publiez jamais cette clé dans GitHub. `GOOGLE_API_KEY` est un réglage distinct, facultatif, pour affiner les coordonnées depuis Paramètres.
 
 ## Comptes, sessions et données personnelles
 L'application affiche la connexion au démarrage. L'inscription demande le nom complet, l'adresse e-mail et un mot de passe ; le nom et l'e-mail sont préremplis dans le profil. Le mot de passe est haché et les données sont stockées dans un espace privé par utilisateur. Les cookies de session sont `HttpOnly`, invalidés côté serveur à la déconnexion et expirent après 8 heures. Seule la session du site est fermée lors de la déconnexion : les données du compte et l'autorisation Gmail sont conservées. Les routes API et Dash vérifient la session côté serveur.
