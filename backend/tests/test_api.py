@@ -200,6 +200,15 @@ def test_home_chat_dashboard():
     assert c.post("/api/geocode/companies").status_code == 400  # pas de clé Google
 
 
+def test_onboarding_completion_is_saved_per_account():
+    client = _second_user_client()
+    assert client.get("/api/settings").json()["onboardingCompleted"] is False
+    completed = client.put("/api/settings", json={"onboardingCompleted": True})
+    assert completed.status_code == 200 and completed.json()["onboardingCompleted"] is True
+    assert client.get("/api/settings").json()["onboardingCompleted"] is True
+    assert _second_user_client().get("/api/settings").json()["onboardingCompleted"] is False
+
+
 def test_quartier_geocode_offline():
     r = c.post("/api/geocode", json={"adresse": "Gueliz, Marrakech"}).json()
     assert abs(r["lat"] - 31.6346) < 1e-3

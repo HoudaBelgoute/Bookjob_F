@@ -74,7 +74,7 @@ export default function CompanyPage() {
     `${c.short} est une entreprise du secteur « ${c.secteur} » basée à ${c.ville}${quartier}.`,
     c.note != null ? `Elle est notée ${c.note}/5 sur Google Maps${c.nb_avis ? ` (${c.nb_avis} avis)` : ''}.` : null,
     c.site_web
-      ? `Son site officiel (${hostOf(c.site_web)}) présente ses activités et ses coordonnées.`
+      ? `Un site web (${hostOf(c.site_web)}) est référencé pour cette entreprise. Consultez-le directement pour vérifier les informations utiles.`
       : 'Elle n’a pas de site web référencé : un appel ou une visite peut être le meilleur moyen de la contacter.',
   ]
     .filter(Boolean)
@@ -227,8 +227,8 @@ export default function CompanyPage() {
             <p className="eyebrow">02 / Postuler</p>
             <h2 className="mt-2 text-[26px] font-semibold text-ink">Les opportunités</h2>
             <p className="mt-4 text-[15px] leading-relaxed text-muted">
-              Aucune offre de stage publiée n’est connue pour cette entreprise : une candidature spontanée est recommandée.
-              Préparez votre CV et votre message, puis vérifiez tout avant l’envoi.
+              Le répertoire BookJob ne contient pas d’offre publiée pour cette entreprise ; cela ne permet pas de confirmer si elle recrute.
+              Vérifiez son site ou contactez-la avant de préparer une candidature spontanée.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <button onClick={() => setApply(true)} className="btn-primary">Préparer ma candidature</button>

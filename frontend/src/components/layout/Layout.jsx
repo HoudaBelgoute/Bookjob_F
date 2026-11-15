@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { useStore } from '../../store/useStore'
 import ChatWidget from '../ChatWidget'
+import Onboarding from '../Onboarding'
 import Toast from '../ui/Toast'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
@@ -11,7 +12,7 @@ import Topbar from './Topbar'
 export default function Layout() {
   const [drawer, setDrawer] = useState(false)
   const { pathname } = useLocation()
-  const { ready, error, init } = useStore()
+  const { ready, error, init, settings } = useStore()
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -104,6 +105,7 @@ export default function Layout() {
 
       <ChatWidget />
       <Toast />
+      {!settings.onboardingCompleted && <Onboarding />}
     </div>
   )
 }

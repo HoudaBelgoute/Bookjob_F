@@ -127,7 +127,7 @@ export default function CompanyDetail({ id }) {
           <h3 className="mb-2 text-[18px] font-medium">À propos de cette entreprise</h3>
           <p className="text-[14px] leading-relaxed text-muted">
             Entreprise du secteur « {c.secteur} » à {c.ville}{c.quartier !== 'Non précisé' ? ` (${c.quartier})` : ''}, trouvée via Google Maps
-            {c.requetes ? ` (recherches : ${c.requetes})` : ''}. Aucune offre de stage publiée n’est connue : une candidature spontanée est recommandée.
+            {c.requetes ? ` (recherches : ${c.requetes})` : ''}. Le répertoire BookJob ne contient pas d’offre publiée ici ; vérifiez directement si l’entreprise recrute.
           </p>
         </section>
         {c.similar?.length > 0 && (
