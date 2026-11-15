@@ -28,7 +28,7 @@ Ce point de situation complète l'audit historique ci-dessous. Il reflète le d�
 - `96f73ee` — matching explicable et provenance.
 - `f722845` — parcours candidature/suivi, statistiques et fallback SPA.
 - `f783183` — documentation IA alignée sur Groq uniquement et explications d'indice exactes.
-- La phase de correction du suivi, de sécurisation de l'export et d'accès direct aux fiches depuis le tableau de bord est commitée sur cette branche locale; aucun changement n'est publié.
+- `3e79e07` — comptage fiable des candidatures, protection de l'export et accès direct aux fiches depuis le tableau de bord.
 
 ---
 
