@@ -225,6 +225,10 @@ def test_data_quality_exposes_cleaning_report_and_completeness():
     assert q.status_code == 200, q.text
     q = q.json()
     assert q["rows_clean"] == 374 and q["duplicate_ids"] == 0
+    assert q["source"]["company_url_field"] == "Lien_Maps"
+    assert q["source"]["collected_at"] is None
+    assert q["source"]["freshness"] == "inconnue"
+    assert q["source"]["verification"] == "non vérifiée par BookJob"
     assert q["report"] and {"probleme", "lignes", "traitement"} <= set(q["report"][0])
     assert all(0 <= f["percent"] <= 100 for f in q["completeness"])
     assert set(q["priorities"]) <= {"A", "B", "C"}

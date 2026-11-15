@@ -121,17 +121,36 @@ def reload() -> None:
 
 
 def match_info(row, profile: dict) -> dict:
-    """Estimation de compatibilité profil ↔ secteur (mots-clés). None si le profil n'a pas de compétences."""
-    skills = {s.lower() for s in split_list(profile.get("competences", ""))}
-    skills |= {w.lower() for s in list(skills) for w in re.findall(r"\w+", s)}
+    """Part des compétences déclarées contenant un mot-clé du secteur; jamais une probabilité d'embauche."""
+    skills = list(dict.fromkeys(
+        skill.strip() for skill in split_list(profile.get("competences", ""))
+        if skill.strip()
+    ))
     if not skills:
-        return {"match": None, "match_skills": [], "missing_skills": []}
+        return {
+            "match": None,
+            "match_skills": [],
+            "missing_skills": [],
+            "match_explanation": "Ajoutez vos compétences pour comparer votre profil aux mots-clés du secteur.",
+        }
     kws = SECTOR_KEYWORDS.get(row["Secteur"], SECTOR_KEYWORDS["Conseil"])
-    hit = [k for k in kws if k in skills]
-    missing = [k for k in kws if k not in skills][:6]
-    ratio = len(hit) / max(1, min(len(kws), 8))
-    score = round(min(98, 25 + 60 * min(1.0, ratio) + (float(row["Score"] or 50) - 50) * 0.2))
-    return {"match": int(score), "match_skills": hit, "missing_skills": missing}
+    sector_keywords = {_norm(keyword) for keyword in kws}
+    hit = [
+        skill for skill in skills
+        if set(_norm(skill).split()) & sector_keywords
+    ]
+    missing = [skill for skill in skills if skill not in hit]
+    score = round(100 * len(hit) / len(skills))
+    explanation = (
+        f"{len(hit)} compétence(s) sur {len(skills)} déclarées contiennent un mot-clé "
+        f"associé au secteur « {row['Secteur']} »."
+    )
+    return {
+        "match": score,
+        "match_skills": hit,
+        "missing_skills": missing,
+        "match_explanation": explanation,
+    }
 
 
 def logo_url(row) -> str | None:

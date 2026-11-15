@@ -218,7 +218,7 @@ export default function SearchPage() {
                       <span className="flex items-center gap-2 text-[13px] text-muted">
                         <span className="rounded-md bg-primary-soft px-2 py-1 text-[12px] font-semibold text-primary">Score {c.score}</span>
                         <span className="tag">Priorité {c.priorite}</span>
-                        {c.match != null && <span className={clsx('rounded-md px-2 py-1 text-[12px] font-semibold', c.match >= 70 ? 'bg-success-soft text-success' : 'bg-gold-soft text-gold-ink')} title="Compatibilité estimée avec votre profil">{c.match}% profil</span>}
+                        {c.match != null && <span className={clsx('rounded-md px-2 py-1 text-[12px] font-semibold', c.match >= 70 ? 'bg-success-soft text-success' : 'bg-gold-soft text-gold-ink')} title={c.match_explanation}>Indice secteur {c.match}/100</span>}
                       </span>
                       <div className="flex items-center gap-3">
                         <button onClick={(e) => { e.stopPropagation(); setApplyFor(c) }} className="btn-primary !px-3 !py-2 text-[12px]">Postuler</button>

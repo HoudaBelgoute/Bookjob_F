@@ -2027,6 +2027,13 @@ def data_quality():
     reasons = (excluded["Motif_exclusion"].value_counts().to_dict()
                if "Motif_exclusion" in excluded else {})
     return {
+        "source": {
+            "label": "Export Google Maps intégré au projet",
+            "company_url_field": "Lien_Maps",
+            "collected_at": None,
+            "verification": "non vérifiée par BookJob",
+            "freshness": "inconnue",
+        },
         "rows_raw": raw_rows,
         "rows_clean": total,
         "rows_excluded": int(len(excluded)),

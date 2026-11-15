@@ -19,7 +19,7 @@ Copiez `backend/.env.example` en `backend/.env` et renseignez au minimum `DATABA
    Une fois la migration vérifiée, ces fichiers locaux peuvent être supprimés.
 
 ## Déploiement Vercel
-Le fichier `vercel.json` déclare deux services : `frontend` (Vite, build statique) et `backend` (FastAPI, `backend/app/main.py`). `/api/*` et `/api/dash/*` vont au backend, le reste au frontend.
+Le fichier `vercel.json` déclare deux services Vercel : `frontend` (Vite, build statique) et `backend` (FastAPI, `backend/app/main.py`). La règle publique `/api/*` arrive d'abord au backend; les autres chemins vont au frontend, dont le fallback interne vers `index.html` permet de recharger directement une route React comme `/entreprises/MRK-001`. La route `/api/dash/` reste servie par le backend.
 1. Pousse le dépôt sur GitHub et importe-le dans Vercel (racine du projet = dossier contenant `vercel.json`, sans framework preset).
 2. Dans **Settings → Environment Variables**, ajoute : `DATABASE_URL`, `BOOKJOB_ENV=production`, `BOOKJOB_PUBLIC_URL=https://<ton-domaine>`, `CRON_SECRET` (chaîne aléatoire), et selon les besoins `GROQ_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI=https://<ton-domaine>/api/google/callback`.
 3. Déploie. Le cron Vercel appelle `/api/cron/email-sync` une fois par jour (plan Hobby) pour synchroniser Gmail ; augmente la fréquence dans `vercel.json` sur un plan Pro.
@@ -69,7 +69,7 @@ python -m app.pipeline.run --source jobs --source osm --source excel --out data/
 | Suivi des candidatures | Mes candidatures : Kanban + liste, filtres (statut, entreprise, source, période), détails, historique des changements, preuve détaillée des e-mails Gmail envoyés, réponses associées et export CSV |
 | Postuler (import CV, dossier cv_envoyes) | « Postuler » : CV importé (aussi enregistré dans la bibliothèque) ou choisi dans la bibliothèque, relance J+7 automatique, téléchargement |
 | Candidature & CV (IA ou modèle, mailto) | CV Studio : CV + e-mail (IA ou modèle), lettre de motivation, 3 mises en page, impression PDF |
-| Tableau de bord | Tableau de bord personnel et page Statistiques (périodes hebdomadaires, statuts, réponses et entreprises) |
+| Tableau de bord | Résumé personnel avec accès à la page Statistiques centralisée (activité, statuts, réponses, entreprises et qualité des données) |
 | — (BookJob) | Favoris, petit chatbot IA flottant (contextuel), recherches enregistrées, notifications de relance, Paramètres |
 
 Les fichiers de données restent compatibles : `backend/data/suivi.csv` et `profil.json` sont ceux de l'app Streamlit. Au premier compte créé, les données locales historiques sont copiées dans son espace privé. Les comptes suivants partent avec leur propre profil et leur propre suivi.
@@ -121,11 +121,11 @@ Avant l'envoi, vérifie le destinataire et le contenu du message dans la fenêtr
 - Le répertoire est un export fourni avec le projet ; aucune date de mise à jour par entreprise n'est disponible. Les coordonnées et évaluations reflètent cet export et ne sont pas garanties comme actuelles.
 - Quand une fiche contient un e-mail, BookJob le propose. Sinon, à l'ouverture de « Postuler », il cherche les adresses publiquement affichées sur le site officiel enregistré et indique la page source. La recherche priorise les pages de contact indiquées par le site ; si aucune adresse n'est publiée (ou si l'entreprise n'a pas de site enregistré), l'adresse doit être vérifiée et saisie manuellement. BookJob ne devine jamais une adresse.
 - BookJob envoie des candidatures par e-mail à l'adresse vérifiée. Le succès confirme que Gmail a créé le message dans « Envoyés », mais ne garantit pas que le serveur du destinataire l'a remis dans sa boîte ou qu'il l'a lu. Il ne soumet pas automatiquement de formulaires sur les sites d'emploi, LinkedIn ou les portails de recrutement, et une adresse publique ne garantit pas qu'elle soit celle du recruteur.
-- Le matching des entreprises est une estimation indicative fondée sur des mots-clés de secteur et le score du répertoire; les détails affichent les mots-clés correspondants et ceux à développer. Pour une offre dont le texte est fourni, BookJob compare aussi les compétences déclarées aux termes explicitement présents. Ces estimations ne mesurent ni l'expérience réelle ni une probabilité d'embauche. Sans description d'offre, aucun score d'offre n'est inventé.
+- L'indice des fiches entreprise est la part des compétences déclarées qui partagent un mot-clé du secteur; les détails montrent les compétences rapprochées et non rapprochées. Il ne tient pas compte d'une offre et ne représente pas une probabilité d'embauche. Pour une offre dont le texte est fourni, BookJob compare séparément les compétences déclarées aux termes explicitement présents. Sans description d'offre, aucun score d'offre n'est inventé.
 - Positions sur la carte : niveau quartier (pas de GPS dans l'export), sauf géocodage Google activé.
 
-## Tableau analytique Plotly Dash
-Le tableau de bord React habituel reste disponible à l'accueil. Pour les graphiques interactifs Dash, ouvre « Ouvrir le tableau analytique interactif » ou va sur `/api/dash/`. Il affiche les candidatures suivies, les envois et entretiens, un graphique filtrable par statut, leur évolution mensuelle et les entreprises par secteur. Dash est servi par le backend FastAPI et utilise les mêmes données BookJob ; il est également protégé par la connexion BookJob si celle-ci est activée.
+## Statistiques
+La page React « Statistiques » regroupe les indicateurs personnels de candidatures et le panorama de la base entreprises, dont les informations de qualité et de fraîcheur des données. Le tableau de bord d'accueil reste volontairement synthétique. L'ancien tableau Plotly Dash est conservé à `/api/dash/` pour compatibilité, mais ne constitue plus un parcours de navigation principal.
 
 ## Limites connues
 La synchronisation des réponses est disponible uniquement avec Gmail ; Outlook n'est pas intégré. La synchronisation automatique nécessite une configuration OAuth valide et un accès Gmail autorisé ; sur Vercel elle passe par le cron `/api/cron/email-sync` (en local, un worker tourne toutes les 15 minutes). Les fichiers importés sont limités à 5 Mo (stockés dans Postgres). Les statistiques reflètent les candidatures et les messages effectivement enregistrés ; l'absence de réponse n'est jamais considérée comme un refus.

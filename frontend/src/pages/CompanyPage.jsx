@@ -208,17 +208,21 @@ export default function CompanyPage() {
                 </div>
               ))}
             </div>
+            <p className="mt-4 text-[12px] text-muted">
+              Source Google Maps · date de collecte inconnue · fiche non vérifiée par BookJob.
+              {c.lien_maps && <> <a className="font-semibold text-primary underline" href={c.lien_maps} target="_blank" rel="noreferrer">Ouvrir la fiche source</a></>}
+            </p>
             {c.match != null && (
               <div className="mt-6 rounded-xl border border-line bg-primary-soft p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Compatibilité avec votre profil</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Correspondance mots-clés profil / secteur</p>
                 <div className="mt-3 h-2 rounded-full bg-chip">
                   <div className="h-full rounded-full bg-success transition-all duration-700" style={{ width: `${c.match}%` }} />
                 </div>
                 <p className="mt-3 text-[14px] text-ink">
-                  <strong>{c.match}%</strong> · En phase : {c.match_skills?.join(', ') || 'aucune'}
+                  <strong>{c.match}/100</strong> · Compétences rapprochées : {c.match_skills?.join(', ') || 'aucune'}
                 </p>
-                <p className="text-[14px] text-ink">À développer : {c.missing_skills?.join(', ') || 'rien d’identifié'}</p>
-                <p className="mt-1 text-[12px] text-muted">Estimation par mots-clés, pas une probabilité d’embauche.</p>
+                <p className="text-[14px] text-ink">Non rapprochées : {c.missing_skills?.join(', ') || 'aucune'}</p>
+                <p className="mt-1 text-[12px] text-muted">{c.match_explanation} Ce n’est ni une analyse d’offre ni une probabilité d’embauche.</p>
               </div>
             )}
           </section>

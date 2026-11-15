@@ -102,14 +102,14 @@ export default function CompanyDetail({ id }) {
               <span className="absolute inset-0 flex items-center justify-center text-[20px] font-semibold text-success">{c.match}<span className="text-[11px]">%</span></span>
             </div>
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Compatibilité avec votre profil</p>
-              <p className="mt-1 text-[14px]"><strong>En phase :</strong> {c.match_skills.join(', ') || 'aucune'}</p>
-              <p className="text-[14px]"><strong>À développer :</strong> {c.missing_skills.join(', ') || 'rien d’identifié'}</p>
-              <p className="mt-1 text-[12px] text-muted">Estimation par mots-clés (compétences du profil ↔ secteur), pas une probabilité d’embauche.</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Correspondance mots-clés profil / secteur · {c.match}/100</p>
+              <p className="mt-1 text-[14px]"><strong>Rapprochées :</strong> {c.match_skills.join(', ') || 'aucune'}</p>
+              <p className="text-[14px]"><strong>Non rapprochées :</strong> {c.missing_skills.join(', ') || 'aucune'}</p>
+              <p className="mt-1 text-[12px] text-muted">{c.match_explanation} Ce n’est ni une analyse d’offre ni une probabilité d’embauche.</p>
             </div>
           </>
         ) : (
-          <p className="text-[13px] text-muted">Renseignez vos compétences dans <button className="font-semibold text-primary" onClick={() => navigate('/profil')}>votre profil</button> pour estimer la compatibilité.</p>
+          <p className="text-[13px] text-muted">Renseignez vos compétences dans <button className="font-semibold text-primary" onClick={() => navigate('/profil')}>votre profil</button> pour afficher leur correspondance avec les mots-clés du secteur.</p>
         )}
       </div>
 
@@ -128,6 +128,10 @@ export default function CompanyDetail({ id }) {
           <p className="text-[14px] leading-relaxed text-muted">
             Entreprise du secteur « {c.secteur} » à {c.ville}{c.quartier !== 'Non précisé' ? ` (${c.quartier})` : ''}, trouvée via Google Maps
             {c.requetes ? ` (recherches : ${c.requetes})` : ''}. Le répertoire BookJob ne contient pas d’offre publiée ici ; vérifiez directement si l’entreprise recrute.
+          </p>
+          <p className="mt-2 text-[12px] text-muted">
+            Source Google Maps · date de collecte inconnue · fiche non vérifiée par BookJob.
+            {c.lien_maps && <> <a className="font-semibold text-primary underline" href={c.lien_maps} target="_blank" rel="noreferrer">Ouvrir la fiche source</a></>}
           </p>
         </section>
         {c.similar?.length > 0 && (
