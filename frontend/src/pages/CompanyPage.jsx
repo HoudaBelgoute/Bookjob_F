@@ -120,7 +120,7 @@ export default function CompanyPage() {
                 <Star size={12} className="mr-1 inline" /> {c.note != null ? `${c.note}/5` : 'Non noté'}
                 {c.nb_avis ? ` · ${c.nb_avis} avis` : ''}
               </span>
-              <span className="tag">Priorité {c.priorite} · score {c.score}</span>
+              <span className="tag" title="Score interne de pertinence combinant secteur, réputation, visibilité et contactabilité ; pas une mesure de recrutement.">Priorité {c.priorite} · répertoire {c.score}</span>
               {t && <span className="rounded-lg bg-success-soft px-3 py-1 text-[12px] font-medium text-success">{t.statut}</span>}
             </div>
             <div className="mt-7 flex flex-wrap gap-3">

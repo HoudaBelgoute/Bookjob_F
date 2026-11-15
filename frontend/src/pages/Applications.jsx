@@ -8,6 +8,7 @@ import CompanyLogo from '../components/ui/CompanyLogo'
 import Modal from '../components/ui/Modal'
 import { fmtDate, STATUS_DOT } from '../data/data'
 import { useStore } from '../store/useStore'
+import { countSentApplications } from '../utils/applicationStats'
 
 const field = 'mt-1.5 w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-[14px] font-normal outline-none focus:border-primary'
 const REVIEW_STATUSES = ['En cours de traitement', 'Entretien programmé', 'Acceptée', 'Refusée']
@@ -100,7 +101,7 @@ export default function Applications() {
     && (!dateStart || (a.date_candidature && a.date_candidature >= dateStart))
     && (!dateEnd || (a.date_candidature && a.date_candidature <= dateEnd))
   ))
-  const sent = tracking.filter((a) => a.date_candidature && !['Offre expirée ou candidature annulée'].includes(a.statut)).length
+  const sent = countSentApplications(tracking)
   const stats = [
     { label: 'Entreprises suivies', value: tracking.length },
     { label: 'Candidatures envoyées', value: sent },

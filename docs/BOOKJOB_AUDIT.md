@@ -1,5 +1,7 @@
 # Audit technique BookJob
 
+> **Note de mise à jour** : les constats ci-dessous sont un instantané de la branche `audit-ameliorations`. La reprise en cours a ajouté le parcours guidé, les informations de provenance, le matching explicable, les statistiques centralisées et le fallback SPA Vercel. Voir `BOOKJOB_FINAL_REPORT.md` pour les fonctionnalités réellement présentes et les validations les plus récentes.
+
 Périmètre : backend FastAPI (`backend/app`), frontend React (`frontend/src`), données (`backend/data`),
 configuration et livrable zip. Chaque point indique son état après la branche `audit-ameliorations`.
 

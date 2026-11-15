@@ -7,7 +7,7 @@ import { TONES, fmtDate } from '../data/data'
 import { useStore } from '../store/useStore'
 
 export default function Dashboard() {
-  const { openCompany, tracking, favorites, profile } = useStore()
+  const { tracking, favorites, profile } = useStore()
   const [d, setD] = useState(null)
   const [err, setErr] = useState('')
 
@@ -111,17 +111,17 @@ export default function Dashboard() {
       <section className="card mt-5 p-6">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-[22px] font-normal">Recommandées pour vous</h2>
-            <p className="mt-1 text-[13px] text-muted">{profile.competences ? 'Selon vos compétences et le score Google Maps.' : 'Les mieux notées (ajoutez vos compétences pour personnaliser).'}</p>
+            <h2 className="text-[22px] font-normal">Entreprises à explorer</h2>
+            <p className="mt-1 text-[13px] text-muted">{profile.competences?.trim() ? 'Triées par correspondance mots-clés profil / secteur et score interne du répertoire.' : 'Fiches aux scores de pertinence les plus élevés dans le répertoire.'}</p>
           </div>
           <Link to="/rechercher" className="flex items-center gap-2 text-[15px] font-semibold text-primary">Voir toutes <ArrowRight size={17} /></Link>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {d.recommandees.map((c) => (
-            <Link key={c.id} to="/rechercher" onClick={() => openCompany(c.id)} className="group overflow-hidden rounded-2xl border border-line transition-shadow hover:shadow-pop">
+            <Link key={c.id} to={`/entreprises/${encodeURIComponent(c.id)}`} className="group overflow-hidden rounded-2xl border border-line transition-shadow hover:shadow-pop">
               <div className="relative h-[116px]" style={{ background: `linear-gradient(135deg, ${(TONES[c.tone] || TONES.blue).bg}, #ffffff 140%)` }}>
                 <span className="absolute -right-6 -top-8 h-28 w-28 rounded-full opacity-60" style={{ background: (TONES[c.tone] || TONES.blue).fg, filter: 'blur(40px)' }} aria-hidden="true" />
-                <span title={c.match_explanation} className="absolute right-3 top-3 rounded-md bg-white/90 px-2.5 py-1 text-[13px] font-medium text-success shadow-card">{c.match != null ? `Indice ${c.match}/100` : `Score ${c.score}`}</span>
+                <span title={c.match_explanation || 'Score interne de pertinence du répertoire, pas une mesure de recrutement.'} className="absolute right-3 top-3 rounded-md bg-white/90 px-2.5 py-1 text-[13px] font-medium text-success shadow-card">{c.match != null ? `Indice ${c.match}/100` : `Répertoire ${c.score}`}</span>
                 <CompanyLogo company={c} size="xl" className="absolute -bottom-8 left-5 shadow-pop ring-4 ring-white" />
               </div>
               <div className="px-5 pb-5 pt-11">

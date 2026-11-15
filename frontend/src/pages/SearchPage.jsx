@@ -37,6 +37,7 @@ export default function SearchPage() {
   const [error, setError] = useState('')
   const [shown, setShown] = useState(PAGE)
   const [applyFor, setApplyFor] = useState(null)
+  const hasProfileSkills = Boolean(profile.competences?.trim())
 
   useEffect(() => {
     let live = true
@@ -65,9 +66,11 @@ export default function SearchPage() {
     <div className="mx-auto max-w-[1600px] px-4 py-8 md:px-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="eyebrow">Recherche d’opportunités</p>
-          <h1 className="page-title mt-3">Trouvez votre prochain stage</h1>
-          <p className="mt-3 text-[16px] text-muted">{meta.total_entreprises} entreprises de Marrakech issues de Google Maps, classées par score.</p>
+          <p className="eyebrow">Recherche d’entreprises</p>
+          <h1 className="page-title mt-3">Trouvez une entreprise à contacter</h1>
+          <p className="mt-3 text-[16px] text-muted">
+            {meta.total_entreprises} entreprises de Marrakech issues de l’export Google Maps. Le score de pertinence du répertoire classe les fiches ; il ne mesure pas leur recrutement.
+          </p>
         </div>
         <button className="btn-soft !px-5 !py-3.5" onClick={() => addAlert(f.q || 'Toutes les entreprises')}>
           <Bell size={18} /> Enregistrer cette recherche
@@ -128,7 +131,7 @@ export default function SearchPage() {
           ))}
 
           <div className="mt-3 border-t border-line pt-4">
-            <h3 className="mb-2 flex justify-between text-[14px] font-semibold">Score minimum <span className="text-primary">{f.score_min}</span></h3>
+            <h3 className="mb-2 flex justify-between text-[14px] font-semibold" title="Score interne du répertoire, pas une probabilité de recrutement.">Score répertoire min. <span className="text-primary">{f.score_min}</span></h3>
             <input type="range" min="0" max="100" value={f.score_min} onChange={(e) => set({ score_min: Number(e.target.value) })} className="w-full accent-primary" aria-label="Score minimum" />
           </div>
 
@@ -172,8 +175,8 @@ export default function SearchPage() {
             <label className="flex items-center gap-2">
               Trier par
               <select value={f.sort} onChange={(e) => set({ sort: e.target.value })} className="bg-transparent font-semibold text-ink outline-none">
-                <option value="score">Score</option>
-                <option value="match">Meilleur matching avec mon profil</option>
+                <option value="score">Score de pertinence du répertoire</option>
+                <option value="match" disabled={!hasProfileSkills}>Correspondance mots-clés profil / secteur</option>
                 <option value="distance" disabled={!home}>Distance</option>
                 <option value="note">Note Google</option>
                 <option value="avis">Nombre d’avis</option>
@@ -216,7 +219,7 @@ export default function SearchPage() {
                     </div>
                     <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
                       <span className="flex items-center gap-2 text-[13px] text-muted">
-                        <span className="rounded-md bg-primary-soft px-2 py-1 text-[12px] font-semibold text-primary">Score {c.score}</span>
+                        <span className="rounded-md bg-primary-soft px-2 py-1 text-[12px] font-semibold text-primary" title="Indice interne combinant secteur, réputation, visibilité et contactabilité. Il ne prédit pas le recrutement.">Répertoire {c.score}</span>
                         <span className="tag">Priorité {c.priorite}</span>
                         {c.match != null && <span className={clsx('rounded-md px-2 py-1 text-[12px] font-semibold', c.match >= 70 ? 'bg-success-soft text-success' : 'bg-gold-soft text-gold-ink')} title={c.match_explanation}>Indice secteur {c.match}/100</span>}
                       </span>
@@ -252,7 +255,7 @@ export default function SearchPage() {
         )}
         {applyFor && <ApplyModal company={applyFor} onClose={() => setApplyFor(null)} />}
       </div>
-      {!profile.competences && <p className="mt-4 text-[12px] text-muted">Astuce : renseignez vos compétences dans le profil pour activer le tri « Meilleur matching ».</p>}
+      {!hasProfileSkills && <p className="mt-4 text-[12px] text-muted">Astuce : renseignez vos compétences dans le profil pour activer le tri par mots-clés profil / secteur.</p>}
     </div>
   )
 }

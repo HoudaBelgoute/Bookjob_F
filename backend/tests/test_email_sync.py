@@ -81,6 +81,19 @@ def test_matching_leaves_tied_applications_for_manual_review():
     assert confidence > 0
 
 
+def test_email_matching_only_considers_validly_dated_sent_applications():
+    rows = pd.DataFrame([
+        _application("sent", status="Candidature envoyée"),
+        _application("draft", status="Brouillon"),
+        _application("cancelled", status="Offre expirée ou candidature annulée"),
+        _application("bad-date", status="Candidature envoyée", date_sent="inconnue"),
+    ])
+
+    eligible = email_sync.eligible_applications(rows)
+
+    assert eligible.ID.tolist() == ["sent"]
+
+
 def test_sync_updates_only_sent_application_and_deduplicates_message(monkeypatch, tmp_path):
     user_id, state = _setup_sync(monkeypatch, tmp_path, [_application()])
     messages = {"message-1": _gmail_message()}

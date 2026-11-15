@@ -1,5 +1,7 @@
 # Audit BookJob au regard du barème officiel
 
+> **Note de mise à jour** : ce tableau conserve l'état de l'audit initial. Les mentions « non exécuté » ci-dessous sont historiques; les tests ciblés et les limites Postgres/Vercel les plus récents sont consignés dans `BOOKJOB_FINAL_REPORT.md`.
+
 Ce document reprend **uniquement les colonnes du barème officiel** (BACKEND, FRONTEND, TEST, RÉSULTAT).
 Le barème ne précise pas de pondération : aucune note n'est attribuée ici. La colonne « Avancement % »
 reste à remplir par l'évaluateur.

@@ -108,6 +108,9 @@ LEGACY_STATUTS = {
     "Sans réponse": "Candidature envoyée",
 }
 STATUTS_NON_ENVOYES = {"Brouillon", "À envoyer"}
+STATUTS_ENVOYES = {
+    "Candidature envoyée", "En cours de traitement", "Entretien programmé", "Acceptée", "Refusée",
+}
 STATUTS_RELANCE = {"Candidature envoyée", "En cours de traitement", "Entretien programmé"}
 COLS = ["ID", "Entreprise", "Secteur", "Poste_visé", "Email_contact", "Source", "Lien_offre", "Statut",
         "Date_candidature", "Date_relance", "Date_entretien", "Fichier_CV", "Remarque",

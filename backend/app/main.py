@@ -1832,6 +1832,11 @@ def put_settings(body: dict):
 
 
 # ---------- tableau de bord / notifications ----------
+def _sent_application_rows(data: pd.DataFrame) -> pd.DataFrame:
+    has_sent_date = pd.to_datetime(data["Date_candidature"], errors="coerce").notna()
+    return data[data["Statut"].isin(C.STATUTS_ENVOYES) & has_sent_date].copy()
+
+
 @app.get("/api/dashboard")
 def dashboard():
     d = S.load_tracking()
@@ -1839,7 +1844,7 @@ def dashboard():
     prof = S.load_profile()
     st = S.load_state()
     tr = get_tracking()
-    sent = int((~d.Statut.replace("", "Brouillon").isin(C.STATUTS_NON_ENVOYES)).sum()) if len(d) else 0
+    sent = len(_sent_application_rows(d))
     sec = cdf.groupby("Secteur").Score.agg(["mean", "count"]).reset_index()
     today = str(date.today())
     interviews = [
@@ -2060,10 +2065,7 @@ def application_statistics(start: str = "", end: str = ""):
 
     data = S.load_tracking().drop_duplicates(subset=["ID"], keep="last").copy()
     data["Date_candidature"] = pd.to_datetime(data["Date_candidature"], errors="coerce").dt.date
-    sent_statuses = {
-        "Candidature envoyée", "En cours de traitement", "Entretien programmé", "Acceptée", "Refusée",
-    }
-    sent = data[data["Statut"].isin(sent_statuses) & data["Date_candidature"].notna()].copy()
+    sent = _sent_application_rows(data)
     within_period = sent[
         (sent["Date_candidature"] >= start_date) & (sent["Date_candidature"] <= end_date)
     ].copy()

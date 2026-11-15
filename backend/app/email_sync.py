@@ -154,6 +154,11 @@ def match_message(data: pd.DataFrame, sender: str, subject: str, body: str) -> t
     return scored[0][1], confidence
 
 
+def eligible_applications(data: pd.DataFrame) -> pd.DataFrame:
+    has_sent_date = pd.to_datetime(data["Date_candidature"], errors="coerce").notna()
+    return data[has_sent_date & data["Statut"].isin(C.STATUTS_ENVOYES)]
+
+
 def _received_at(message: dict) -> str:
     try:
         milliseconds = int(message["internalDate"])
@@ -193,12 +198,7 @@ def sync_user(user_id: str) -> dict:
             body = _message_text(message)
             snippet = str(message.get("snippet", "") or body[:500])[:1000]
             classification = classify_message(subject, body or snippet)
-            eligible = data[
-                data["Date_candidature"].astype(str).str.strip().ne("")
-                & ~data["Statut"].isin(
-                    C.STATUTS_NON_ENVOYES | {"Offre expirée ou candidature annulée"}
-                )
-            ]
+            eligible = eligible_applications(data)
             match_index, match_confidence = match_message(
                 eligible, sender, subject, body or snippet,
             )
