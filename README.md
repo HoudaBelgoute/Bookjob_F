@@ -1,7 +1,8 @@
-# BookJob × Stages Marrakech
+# BookJob
 
-Le design BookJob (React) branché sur le backend de l'app Streamlit « Stages Marrakech » (FastAPI + pandas).
-Les 374 entreprises du fichier Google Maps nettoyé remplacent les offres de démonstration.
+BookJob est une application de recherche d'entreprises et de suivi des candidatures, avec un répertoire initial centré sur Marrakech. L'interface React/Vite utilise une API FastAPI; les comptes, profils et candidatures sont isolés par utilisateur dans PostgreSQL.
+
+L'application inclut la recherche d'entreprises, une carte, le suivi des candidatures, un éditeur de CV et de lettres, ainsi que des intégrations facultatives pour l'IA, Gmail, Google Places et Jooble. Google Places sert à rechercher des entreprises et des lieux; Jooble est la source distincte d'offres d'emploi. Les intégrations externes ne sont disponibles que si leurs clés et autorisations requises sont configurées.
 
 ## Lancer (Windows)
 Copiez `backend/.env.example` en `backend/.env` et renseignez au minimum `DATABASE_URL` (Supabase), puis double-cliquez `start.bat` → http://localhost:8000

@@ -1,36 +1,27 @@
-# État de livraison — BookJob
+# État actuel du projet — BookJob
 
-Ce point de situation complète l'audit historique ci-dessous et inclut les compléments fonctionnels de novembre 2026.
+Ce document décrit les fonctionnalités et validations présentes dans la branche actuelle. Les constats de l'audit initial sont conservés dans la section historique ci-dessous.
 
-## Parcours et fonctionnalités livrés
-- Inscription/connexion par compte, données privées par utilisateur dans Supabase/Postgres, synchronisation Gmail à autorisation séparée.
-- Parcours entreprise : recherche ou recommandation du tableau de bord → fiche persistante `/entreprises/{id}` avec lien source Google Maps et fraîcheur explicitement inconnue → préparation/envoi → page « Mes candidatures ». Les recommandations ouvrent directement la fiche concernée, y compris après actualisation. Le fallback Vercel sert l'entrée React pour les routes profondes; les chemins `/api/*` sont réécrits vers FastAPI avant le catch-all frontend.
-- Le tableau de bord et le suivi ne comptent comme candidatures envoyées que celles ayant un statut d'envoi/réponse et une date valide; brouillons, annulations, expirations et dates invalides sont exclus.
-- L'indice profil/secteur mesure la part des compétences déclarées qui contiennent un mot-clé du secteur. Il n'analyse pas une annonce et ne prédit pas l'embauche. Le score de répertoire (/100) combine secteur, réputation lissée, visibilité et contactabilité; il n'est pas une mesure de recrutement.
-- Les réponses Gmail distinguent maintenant refus, acceptation, entretien, demande de documents et demande de relance. Une mise à jour automatique exige un message daté et une association fiable; les extraits Gmail sont affichés dans l'espace privé et les autres cas restent à confirmer. Une absence de réponse ne devient pas un refus.
-- Le pipeline existant sait importer Excel, Google Places et OpenStreetMap et interroger les annonces publiques autorisées décrites dans le README. Il ne valide pas périodiquement les faits de l'export Google Maps livré : sa date de collecte reste inconnue, et aucune activité de recrutement n'est inventée.
-- Le tableau de bord permet de choisir un objectif hebdomadaire; sa progression ne compte que les candidatures envoyées datées de lundi à aujourd'hui. Les brouillons de relance J+7/J+14 ouvrent le logiciel de messagerie de l'utilisateur et ne sont jamais envoyés par ce bouton. L'envoi automatique J+7 existant reste désactivé par défaut et demande une activation explicite.
-- Seul Groq est pris en charge pour l'IA distante. La clé personnelle est vérifiée puis chiffrée avec Fernet dans le stockage privé du compte; `BOOKJOB_AI_KEY_ENCRYPTION_KEY` est requise. Sans cette variable, l'enregistrement de clé est désactivé et BookJob peut utiliser la configuration serveur partagée.
-- Le guide d'accueil décrit désormais tableau de bord, profil, entreprises, carte et candidatures; il peut être relancé depuis Paramètres.
-- L'application n'a pas de compte partagé ni de mode démo prérempli : les comptes et données sont privés. Les documents d'audit existants servent de livrables d'examen; ils ne constituent pas une preuve de déploiement réel.
+## Fonctionnalités
+- Les utilisateurs peuvent créer un compte avec nom, adresse e-mail et mot de passe, sans clé d'inscription. La connexion Google est optionnelle; l'autorisation Gmail est distincte.
+- Les données de compte et les candidatures sont privées par utilisateur et stockées dans Supabase/Postgres.
+- Le répertoire local d'entreprises et les sources à la demande sont distincts : Google Places recherche des lieux et entreprises, Jooble fournit des offres d'emploi, et le pipeline documenté prend aussi en charge OpenStreetMap et les sources publiques autorisées.
+- Les offres Jooble peuvent être consultées puis importées au suivi par sélection. Google Places est présenté comme une source d'entreprises, et son import persistant utilise uniquement le Place ID.
+- Groq et Anthropic/Claude sont pris en charge pour les fonctions IA existantes. Les clés personnelles sont validées auprès du fournisseur, chiffrées avec Fernet et isolées par compte; elles ne sont pas renvoyées dans les réponses API. `BOOKJOB_API_KEY_ENCRYPTION_KEY` est requise pour enregistrer les clés personnelles. En son absence, leur enregistrement est désactivé; les clés serveur configurées ou les modèles locaux restent les solutions de repli prévues.
+- Le frontend React/Vite et l'API FastAPI sont déclarés dans `vercel.json` comme services distincts. Les routes `/api/*` sont dirigées vers l'API et les autres chemins vers le frontend. Le cron défini appelle la route de synchronisation Gmail une fois par jour.
+- Les indicateurs et scores sont des outils de classement internes, pas des prédictions d'embauche. La fraîcheur des données du répertoire local n'est pas connue par fiche.
 
-## Limites restantes
-- **Enrichissement vérifié** : les connecteurs autorisés existants peuvent collecter des données fraîches sur demande, mais la base importée n'a ni horodatage par fiche ni mécanisme de revalidation; elle demeure présentée comme non vérifiée.
-- Les intégrations Groq, Gmail/OAuth, Google Geocoding et le déploiement Vercel ne sont vérifiés que si les environnements de service correspondants sont configurés; aucune clé ni aucun compte privé n'a été inspecté.
+## Configuration et limites
+- La configuration serveur est décrite dans `backend/.env.example`. Les clés personnelles ne doivent pas être placées dans `.env` ou dans le dépôt.
+- Gmail, Google OAuth, les fournisseurs IA, Google Places, Jooble et les tâches cron nécessitent les clés ou autorisations correspondantes. Le présent dépôt ne prouve pas qu'un déploiement tiers est configuré ou fonctionnel.
+- Les tests qui nécessitent PostgreSQL doivent être exécutés avec une base de test dédiée via `TEST_DATABASE_URL`. Aucun test de cette branche n'utilise la base de production fournie ailleurs.
+- L'API Vercel et ses deux services sont validés ici par inspection de la configuration et de son schéma; aucun déploiement Vercel n'est effectué ni revendiqué.
+- Si `BOOKJOB_REGISTRATION_KEY` existe encore dans le projet Vercel, le code ne la lit plus; elle peut être retirée manuellement depuis les paramètres de l'environnement.
 
-## Vérification du complément (16 novembre 2026)
-- Backend hors base : 53 tests réussis, dont chiffrement/priorité des clés Groq, objectifs hebdomadaires, stades J+7/J+14 et prudence de classification Gmail; compilation Python réussie.
-- Frontend : `npm run test` (1 test), `npm run build` et `npm run lint` réussis.
-- La suite complète a été tentée; les tests API/auth, Dash et synchronisation qui nécessitent Postgres échouent ou ne peuvent démarrer car `DATABASE_URL`/`TEST_DATABASE_URL` ne sont pas configurés dans cet environnement. Les nouvelles routes API n'ont donc pas été exercées contre Supabase. Gmail/OAuth, Groq et Vercel en production ne sont pas déclarés vérifiés.
-- `npm run lint` signale deux avertissements préexistants dans `frontend/src/data/data.js` (regex préfixées à remplacer par `startsWith`).
-
-## Commits de la reprise
-- `0606f78` — clés IA personnelles chiffrées, objectif hebdomadaire, relances guidées J+7/J+14 et prudence Gmail renforcée.
-- `3a9a961` — onboarding guidé et transparence sur les entreprises.
-- `96f73ee` — matching explicable et provenance.
-- `f722845` — parcours candidature/suivi, statistiques et fallback SPA.
-- `f783183` — documentation IA alignée sur Groq uniquement et explications d'indice exactes.
-- `3e79e07` — comptage fiable des candidatures, protection de l'export et accès direct aux fiches depuis le tableau de bord.
+## Vérifications récentes
+- Backend sans base : 65 tests réussis, 1 ignoré. Les tests nécessitant PostgreSQL ne sont pas validés dans cet environnement.
+- Frontend : test ciblé, lint et build réussis. Le lint signale deux avertissements préexistants dans `frontend/src/data/data.js`.
+- Les appels réels aux fournisseurs et le déploiement Vercel ne sont pas déclarés testés par cette validation locale.
 
 ---
 
@@ -43,7 +34,7 @@ L'identité visuelle est conservée (mêmes composants et classes CSS). Les modi
 sécurité, la reproductibilité des données (collecte → nettoyage → export), la mesure de la qualité,
 la connexion avec Google et les tests.
 
-## ⚠️ Action obligatoire : secrets
+## Action requise concernant les secrets
 Le zip reçu contenait `backend/.env` avec des clés réelles. Elles doivent être **régénérées** :
 secret client OAuth (Google Cloud Console), clé Groq et toute autre clé ou mot de passe d'application
 présent dans ce fichier. Le fichier n'a jamais été commité et reste ignoré par Git ; le zip livré ne le contient pas.
