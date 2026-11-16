@@ -25,6 +25,7 @@ Ce point de situation complète l'audit historique ci-dessous et inclut les comp
 - `npm run lint` signale deux avertissements préexistants dans `frontend/src/data/data.js` (regex préfixées à remplacer par `startsWith`).
 
 ## Commits de la reprise
+- `0606f78` — clés IA personnelles chiffrées, objectif hebdomadaire, relances guidées J+7/J+14 et prudence Gmail renforcée.
 - `3a9a961` — onboarding guidé et transparence sur les entreprises.
 - `96f73ee` — matching explicable et provenance.
 - `f722845` — parcours candidature/suivi, statistiques et fallback SPA.
