@@ -4,8 +4,10 @@ from app import ai
 
 
 def test_personal_groq_key_is_tested_encrypted_and_never_returned(monkeypatch, tmp_path):
+    monkeypatch.setattr("app.store.load_state", lambda: {"settings": {"aiProvider": "auto"}})
     encrypted_path = tmp_path / "groq-api-key.enc"
     monkeypatch.setattr(ai.C, "AI_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(ai.C, "API_KEY_ENCRYPTION_KEY", "")
     monkeypatch.setattr(ai.C, "GROQ_API_KEY", "server-key")
     monkeypatch.setattr(ai.C, "user_path", lambda _path: encrypted_path)
     owner_token = ai.C.set_current_user("test-user")
@@ -49,6 +51,7 @@ def test_personal_groq_key_is_tested_encrypted_and_never_returned(monkeypatch, t
 def test_personal_key_is_not_saved_without_encryption_or_provider_acceptance(monkeypatch, tmp_path):
     encrypted_path = tmp_path / "groq-api-key.enc"
     monkeypatch.setattr(ai.C, "AI_KEY_ENCRYPTION_KEY", "")
+    monkeypatch.setattr(ai.C, "API_KEY_ENCRYPTION_KEY", "")
     monkeypatch.setattr(ai.C, "user_path", lambda _path: encrypted_path)
     owner_token = ai.C.set_current_user("test-user")
     try:
@@ -61,6 +64,7 @@ def test_personal_key_is_not_saved_without_encryption_or_provider_acceptance(mon
         assert not encrypted_path.exists()
 
         monkeypatch.setattr(ai.C, "AI_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+        monkeypatch.setattr(ai.C, "API_KEY_ENCRYPTION_KEY", "")
 
         class RejectedResponse:
             status_code = 401
@@ -79,9 +83,11 @@ def test_personal_key_is_not_saved_without_encryption_or_provider_acceptance(mon
 
 
 def test_unreadable_personal_key_does_not_silently_fall_back_to_server_key(monkeypatch, tmp_path):
+    monkeypatch.setattr("app.store.load_state", lambda: {"settings": {"aiProvider": "auto"}})
     encrypted_path = tmp_path / "groq-api-key.enc"
     encrypted_path.write_bytes(b"not-a-fernet-token")
     monkeypatch.setattr(ai.C, "AI_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(ai.C, "API_KEY_ENCRYPTION_KEY", "")
     monkeypatch.setattr(ai.C, "GROQ_API_KEY", "server-key")
     monkeypatch.setattr(ai.C, "user_path", lambda _path: encrypted_path)
     owner_token = ai.C.set_current_user("test-user")

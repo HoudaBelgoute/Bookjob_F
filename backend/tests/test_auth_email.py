@@ -16,7 +16,6 @@ from app import main
 
 def test_login_protects_api_and_sets_session_cookie(monkeypatch, tmp_path, db_conn):
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
     client = TestClient(main.app)
 
@@ -59,7 +58,6 @@ def test_login_protects_api_and_sets_session_cookie(monkeypatch, tmp_path, db_co
 
 def test_tracking_and_email_history_are_isolated_between_accounts(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
     first = TestClient(main.app)
     second = TestClient(main.app)
@@ -113,7 +111,6 @@ def test_two_account_spaces_isolate_favorites_applications_and_cvs(monkeypatch, 
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(C, "CV_LIB_DIR", C.DATA_DIR / "uploads" / "cv_bibliotheque")
     monkeypatch.setattr(C, "CV_SENT_DIR", C.DATA_DIR / "uploads" / "cv_envoyes")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
     user_a = TestClient(main.app)
     user_b = TestClient(main.app)
@@ -177,7 +174,6 @@ def test_legacy_gmail_connection_migrates_only_to_first_account(monkeypatch, tmp
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_ID", "client-id")
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
     monkeypatch.setattr(C, "GOOGLE_OAUTH_REDIRECT_URI", "https://bookjob.example/api/google/callback")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     C.GOOGLE_TOKEN_FILE.parent.mkdir(parents=True)
     C.GOOGLE_TOKEN_FILE.write_text(json.dumps({
         "refresh_token": "legacy-refresh-token",
@@ -211,7 +207,6 @@ def test_legacy_gmail_connection_migrates_only_to_first_account(monkeypatch, tmp
 
 def test_logout_revokes_session_and_preserves_google_connection(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
     monkeypatch.setattr(main.gmail, "status", lambda: {"connected": True})
     monkeypatch.setattr(main.gmail, "disconnect", lambda: pytest.fail("logout must preserve Gmail OAuth"))
@@ -262,7 +257,6 @@ def _configure_application(monkeypatch, tmp_path, *, send=None):
         state["tracking"] = copy
 
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
     monkeypatch.setattr(C, "user_path", lambda path: path)
     monkeypatch.setattr(C, "CV_SENT_DIR", cv_dir)
@@ -783,7 +777,6 @@ def test_preview_delivery_failure_leaves_application_unsent(monkeypatch, tmp_pat
 
 def test_google_oauth_callback_requires_matching_state(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
     monkeypatch.setattr(C, "BOOKJOB_ENV", "development")
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_ID", "client-id")

@@ -16,7 +16,7 @@ tmp = Path(tempfile.mkdtemp())
 shutil.copytree(SRC / "data", tmp / "data", ignore=shutil.ignore_patterns("users"))
 os.environ["BOOKJOB_DATA"] = str(tmp / "data")
 os.environ["BOOKJOB_FRONT_DIST"] = str(tmp / "nodist")
-os.environ["BOOKJOB_REGISTRATION_KEY"] = ""
+os.environ["BOOKJOB_REGISTRATION_KEY"] = "legacy-value-is-ignored"
 sys.path.insert(0, str(SRC))
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -35,7 +35,6 @@ C.GEOCACHE = C.DATA_DIR / "geocode_cache.json"
 C.EMAIL_CONFIRMATIONS_FILE = C.DATA_DIR / "email_confirmations.json"
 C.GOOGLE_TOKEN_FILE = tmp / "google_oauth_token.json"
 C.FRONT_DIST = tmp / "nodist"
-C.REGISTRATION_KEY = ""
 accounts.initialize()
 
 # Supprime le compte laisse par un lancement precedent pour que l'inscription renvoie 201.
@@ -213,6 +212,7 @@ def test_personal_ai_key_api_never_returns_the_key(monkeypatch):
         assert key == personal_key
 
     monkeypatch.setattr(C, "AI_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(C, "API_KEY_ENCRYPTION_KEY", "")
     monkeypatch.setattr(ai, "test_api_key", validate_key)
 
     rejected = c.post("/api/ai/key", json={"api_key": "x" * 513})

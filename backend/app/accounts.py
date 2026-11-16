@@ -93,7 +93,6 @@ def _initialize_user_profile(user_id: str, full_name: str, email: str) -> None:
 def create_user(
     email: str,
     password: str,
-    registration_key: str = "",
     full_name: str = "",
 ) -> tuple[dict, str]:
     normalized_email = email.strip().casefold()
@@ -112,10 +111,6 @@ def create_user(
         # Verrou de transaction : évite deux créations simultanées (remplace BEGIN IMMEDIATE).
         connection.execute("SELECT pg_advisory_xact_lock(727001)")
         count = connection.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
-        if count and C.REGISTRATION_KEY and not hmac.compare_digest(
-            registration_key.encode(), C.REGISTRATION_KEY.encode()
-        ):
-            raise PermissionError("Une clé d’invitation valide est nécessaire pour créer un compte.")
         user_id = secrets.token_hex(16)
         salt = secrets.token_bytes(16)
         try:
@@ -168,10 +163,8 @@ def login_with_google(email: str, full_name: str = "") -> tuple[dict, str]:
         user = connection.execute("SELECT * FROM users WHERE email = %s", (normalized_email,)).fetchone()
     if user is not None:
         return _public_user(user), create_session(user["id"])
-    if C.REGISTRATION_KEY and user_count() > 0:
-        raise PermissionError("Les inscriptions se font sur invitation : crée d'abord ton compte avec la clé.")
     name = (full_name or normalized_email.split("@", 1)[0]).strip()[:120]
-    return create_user(normalized_email, secrets.token_urlsafe(32), C.REGISTRATION_KEY, name)
+    return create_user(normalized_email, secrets.token_urlsafe(32), name)
 
 
 def create_session(user_id: str) -> str:

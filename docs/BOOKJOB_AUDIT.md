@@ -19,7 +19,7 @@ configuration et livrable zip. Chaque point indique son état après la branche 
 | E1 | Page de résultat OAuth : `postMessage(..., "*")` | Un autre site ouvrant la fenêtre pouvait recevoir le message | Corrigé : origine `window.location.origin` |
 | E2 | `PUT /api/profile` acceptait n'importe quel JSON | Données arbitraires/volumineuses stockées | Corrigé : clés autorisées, types simples, 5 000 caractères max (422 sinon) |
 | E3 | Aucun code de collecte ni de nettoyage dans le dépôt ; Excel brut ignoré | Critères « Data Collection / Cleaning » non démontrables | Corrigé : `app/pipeline/` + Excel brut versionné |
-| E4 | Pas de connexion Google pour le compte (seulement l'accès Gmail) | Fonction demandée absente | Ajoutée : OIDC `openid email profile`, `state` vérifié, e-mail vérifié requis, liaison au compte existant, respect de la clé d'invitation |
+| E4 | Pas de connexion Google pour le compte (seulement l'accès Gmail) | Fonction demandée absente | Ajoutée : OIDC `openid email profile`, `state` vérifié, e-mail vérifié requis, liaison au compte existant; la création de comptes publics ne demande pas de clé d'inscription |
 
 ## Moyenne
 

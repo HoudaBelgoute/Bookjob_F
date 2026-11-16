@@ -42,9 +42,9 @@ const qs = (params) => {
 export const api = {
   authStatus: (signal) => req('/auth/status', { signal }),
   login: (email, password) => req('/auth/login', { method: 'POST', body: { email, password } }),
-  register: (full_name, email, password, registration_key) => req('/auth/register', {
+  register: (full_name, email, password) => req('/auth/register', {
     method: 'POST',
-    body: { full_name, email, password, registration_key },
+    body: { full_name, email, password },
   }),
   logout: () => req('/auth/logout', { method: 'POST' }),
   googleStatus: () => req('/google/status'),
@@ -101,6 +101,23 @@ export const api = {
   aiKeyStatus: () => req('/ai/key'),
   saveAiKey: (api_key) => req('/ai/key', { method: 'POST', body: { api_key } }),
   deleteAiKey: () => req('/ai/key', { method: 'DELETE' }),
+  integrationKeyStatuses: () => req('/integrations/keys'),
+  saveIntegrationKey: (provider, api_key) => req(`/integrations/keys/${encodeURIComponent(provider)}`, {
+    method: 'POST',
+    body: { api_key },
+  }),
+  deleteIntegrationKey: (provider) => req(`/integrations/keys/${encodeURIComponent(provider)}`, { method: 'DELETE' }),
+  searchDataSource: (provider, query, location) => req('/data-sources/search', {
+    method: 'POST',
+    body: { provider, query, location },
+  }),
+  importDataSourceResults: (provider, review_id, item_ids) => req('/data-sources/import', {
+    method: 'POST',
+    body: { provider, review_id, item_ids },
+  }),
+  savedGooglePlaces: () => req('/data-sources/places'),
+  deleteGooglePlace: (placeId) => req(`/data-sources/places/${encodeURIComponent(placeId)}`, { method: 'DELETE' }),
+  refreshGooglePlaces: () => req('/data-sources/places/refresh', { method: 'POST' }),
   dashboard: () => req('/dashboard'),
   notifications: () => req('/notifications'),
   stats: (start, end) => req(`/stats${qs({ start, end })}`),

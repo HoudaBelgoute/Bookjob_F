@@ -1,112 +1,89 @@
-"""Génération CV / e-mail et assistant. Les clés restent côté serveur (jamais envoyées au navigateur).
-Fournisseur IA unique : Groq."""
+"""Génération CV / e-mail et assistant avec Groq ou Anthropic."""
 import json
 
 import requests
-from cryptography.fernet import Fernet, InvalidToken
 
-from . import config as C
+from . import config as C, integrations
 from .store import split_list
 
 
-def _secret_path():
-    if not C.current_user_id():
-        return None
-    return C.user_path(C.DATA_DIR / "secrets" / "groq-api-key.enc")
-
-
-def _cipher() -> Fernet:
-    if not C.AI_KEY_ENCRYPTION_KEY:
-        raise AIError("Le stockage chiffré des clés IA personnelles n'est pas configuré sur le serveur.")
-    try:
-        return Fernet(C.AI_KEY_ENCRYPTION_KEY.encode("ascii"))
-    except (ValueError, UnicodeEncodeError) as ex:
-        raise AIError("La configuration de chiffrement des clés IA est invalide.") from ex
-
-
 def personal_api_key() -> str:
-    path = _secret_path()
-    if path is None or not path.exists():
-        return ""
     try:
-        return _cipher().decrypt(path.read_bytes()).decode("utf-8")
-    except (InvalidToken, UnicodeDecodeError) as ex:
-        raise AIError("La clé IA personnelle ne peut pas être déchiffrée avec la configuration actuelle.") from ex
+        return integrations.personal_key("groq")
+    except integrations.IntegrationError as ex:
+        raise AIError(str(ex)) from ex
 
 
 def api_key() -> str:
-    return personal_api_key() or C.GROQ_API_KEY
+    return _active_provider()[1]
 
 
 def provider() -> str:
     try:
-        return "groq" if api_key() else "none"
+        return _active_provider()[0]
     except AIError:
         return "unavailable"
 
 
 def key_status() -> dict:
-    path = _secret_path()
-    personal_configured = bool(path and path.exists())
-    try:
-        _cipher()
-        encryption_available = True
-    except AIError:
-        encryption_available = False
-    personal_key_usable = False
-    if personal_configured and encryption_available:
-        try:
-            personal_key_usable = bool(personal_api_key())
-        except AIError:
-            pass
-    if personal_configured and not personal_key_usable:
-        mode = "unavailable"
-    elif personal_configured:
-        mode = "personal"
-    elif C.GROQ_API_KEY:
-        mode = "server"
-    else:
-        mode = "none"
+    status = integrations.key_status("groq")
     return {
-        "provider": "groq" if mode in {"personal", "server"} else "none",
-        "mode": mode,
-        "personal_key_configured": personal_configured,
-        "encryption_available": encryption_available,
-        "masked_key": "••••••••" if personal_configured else "",
+        "provider": "groq" if status["mode"] in {"personal", "server"} else "none",
+        "mode": status["mode"],
+        "personal_key_configured": status["personal_key_configured"],
+        "encryption_available": status["encryption_available"],
+        "masked_key": status["masked_key"],
     }
 
 
 def test_api_key(key: str) -> None:
     try:
-        response = requests.get(
-            "https://api.groq.com/openai/v1/models",
-            timeout=15,
-            headers={"Authorization": f"Bearer {key}"},
-        )
-    except requests.RequestException as ex:
-        raise AIError("Impossible de joindre le fournisseur Groq pour vérifier la clé.") from ex
-    if response.status_code in {401, 403}:
-        raise AIError("Groq a refusé cette clé. Vérifie-la puis réessaie.")
-    if not response.ok:
-        raise AIError("Groq n'a pas pu vérifier la clé pour le moment.")
+        integrations.validate_key("groq", key)
+    except integrations.IntegrationError as ex:
+        raise AIError(str(ex)) from ex
 
 
 def save_personal_api_key(key: str) -> None:
-    path = _secret_path()
-    if path is None:
-        raise AIError("Connexion BookJob requise pour enregistrer une clé personnelle.")
-    cleaned = key.strip()
-    if not cleaned or len(cleaned) > 512 or "\n" in cleaned or "\r" in cleaned:
-        raise AIError("Saisis une clé Groq valide.")
-    cipher = _cipher()
-    test_api_key(cleaned)
-    path.write_bytes(cipher.encrypt(cleaned.encode("utf-8")))
+    try:
+        integrations.save_key("groq", key)
+    except integrations.IntegrationError as ex:
+        raise AIError(str(ex)) from ex
 
 
 def remove_personal_api_key() -> None:
-    path = _secret_path()
-    if path and path.exists():
-        path.unlink()
+    integrations.remove_key("groq")
+
+
+def _active_provider() -> tuple[str, str]:
+    preference = "auto"
+    if C.current_user_id():
+        from . import store
+        preference = store.load_state()["settings"].get("aiProvider", "auto")
+    if preference in {"groq", "anthropic"}:
+        candidates = [preference]
+    else:
+        candidates = ["groq", "anthropic"]
+
+    if preference == "auto":
+        # A personal key is preferred to a shared server key, while existing Groq
+        # server configuration remains the default when no personal key is saved.
+        for name in candidates:
+            path = integrations._configured_path(name)
+            if path:
+                try:
+                    return name, integrations.personal_key(name)
+                except integrations.IntegrationError as ex:
+                    raise AIError(str(ex)) from ex
+        for name in candidates:
+            if integrations.server_key(name):
+                return name, integrations.server_key(name)
+        return "none", ""
+
+    try:
+        key = integrations.resolve_key(preference)
+        return (preference if key else "none"), key
+    except integrations.IntegrationError as ex:
+        raise AIError(str(ex)) from ex
 
 
 def candidate_name(profile: dict) -> str:
@@ -118,26 +95,42 @@ class AIError(Exception):
 
 
 def complete(system: str, messages: list[dict], max_tokens: int = 2000) -> str:
-    key = api_key()
+    name, key = _active_provider()
     if not key:
-        raise AIError("Configure une clé Groq personnelle dans les paramètres ou la clé serveur GROQ_API_KEY.")
+        raise AIError("Configure une clé Groq ou Anthropic personnelle dans les paramètres, ou une clé serveur.")
     try:
-        r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            timeout=120,
-            headers={"Authorization": f"Bearer {key}"},
-            json={
-                "model": C.GROQ_MODEL,
-                "max_tokens": max_tokens,
-                "messages": [{"role": "system", "content": system}, *messages],
-            },
-        )
+        if name == "anthropic":
+            r = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                timeout=120,
+                headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                json={
+                    "model": C.ANTHROPIC_MODEL,
+                    "max_tokens": max_tokens,
+                    "system": system,
+                    "messages": messages,
+                },
+            )
+        else:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                timeout=120,
+                headers={"Authorization": f"Bearer {key}"},
+                json={
+                    "model": C.GROQ_MODEL,
+                    "max_tokens": max_tokens,
+                    "messages": [{"role": "system", "content": system}, *messages],
+                },
+            )
         r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
-    except requests.RequestException as ex:
-        raise AIError("Le fournisseur IA n'a pas pu traiter la demande.") from ex
-    except (KeyError, IndexError, TypeError) as ex:
-        raise AIError("Le fournisseur IA a renvoyé une réponse invalide.") from ex
+        response = r.json()
+        if name == "anthropic":
+            return "".join(part["text"] for part in response["content"] if part["type"] == "text")
+        return response["choices"][0]["message"]["content"]
+    except requests.RequestException:
+        raise AIError("Le fournisseur IA n'a pas pu traiter la demande.") from None
+    except (KeyError, IndexError, TypeError):
+        raise AIError("Le fournisseur IA a renvoyé une réponse invalide.") from None
 
 
 CV_SYSTEM = """Tu rédiges en français un CV d'une page compatible ATS et un e-mail de candidature pour un stage.

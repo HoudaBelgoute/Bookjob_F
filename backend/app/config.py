@@ -26,7 +26,6 @@ ALLOWED_CV_EXT = {"pdf"}
 BOOKJOB_ENV = os.getenv("BOOKJOB_ENV", "development").lower()
 SESSION_COOKIE_NAME = "bookjob_session"
 SESSION_MAX_AGE = 8 * 60 * 60
-REGISTRATION_KEY = os.getenv("BOOKJOB_REGISTRATION_KEY", "")
 _CURRENT_USER_ID: ContextVar[str | None] = ContextVar("bookjob_user_id", default=None)
 
 
@@ -115,14 +114,18 @@ STATUTS_RELANCE = {"Candidature envoyée", "En cours de traitement", "Entretien 
 COLS = ["ID", "Entreprise", "Secteur", "Poste_visé", "Email_contact", "Source", "Lien_offre", "Statut",
         "Date_candidature", "Date_relance", "Date_entretien", "Fichier_CV", "Remarque",
         "Date_modification", "Derniere_activite", "Derniere_verification_email"]
-SOURCES = ["Google Maps", "Candidature directe", "LinkedIn", "Indeed", "Rekrute", "Emploi.ma", "Autre"]
+SOURCES = ["Google Maps", "Google Places", "Jooble", "Candidature directe", "LinkedIn", "Indeed", "Rekrute", "Emploi.ma", "Autre"]
 PROFILE_FIELDS = ["nom", "prenom", "nom_famille", "titre", "email", "tel", "ville", "linkedin",
                   "filiere", "diplomes", "resume", "competences", "formation", "experiences",
                   "engagement_associatif", "projets", "langues", "certifs"]
 
-# IA : Groq uniquement.
+# Fournisseurs externes : les clés utilisateur sont chiffrées avec cette clé Fernet.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
+JOOBLE_API_KEY = os.getenv("JOOBLE_API_KEY", "")
 AI_KEY_ENCRYPTION_KEY = os.getenv("BOOKJOB_AI_KEY_ENCRYPTION_KEY", "")
+API_KEY_ENCRYPTION_KEY = AI_KEY_ENCRYPTION_KEY or os.getenv("BOOKJOB_API_KEY_ENCRYPTION_KEY", "")
 # Géocodage précis optionnel (sinon : position approximative au niveau du quartier)
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
