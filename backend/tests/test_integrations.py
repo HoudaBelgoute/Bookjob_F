@@ -124,6 +124,25 @@ def test_jooble_search_uses_personal_or_server_key_and_normalizes_results(monkey
     assert results[0]["retrieved_at"]
 
 
+def test_provider_urls_reject_non_web_schemes(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        @staticmethod
+        def json():
+            return {"jobs": [
+                {"id": "bad", "title": "Unsafe link", "link": "javascript:alert(1)"},
+                {"id": "good", "title": "Web link", "link": "https://jobs.example/offer"},
+            ]}
+
+    monkeypatch.setattr(C, "JOOBLE_API_KEY", "server-key")
+    monkeypatch.setattr(data_sources.requests, "post", lambda *args, **kwargs: Response())
+    results = data_sources.search("jooble", "stage", "Marrakech")
+    assert results[0]["url"] == ""
+    assert results[1]["url"] == "https://jobs.example/offer"
+
+
 def test_google_place_refresh_returns_live_details_without_persisting_content(monkeypatch):
     captured = []
 
@@ -134,7 +153,7 @@ def test_google_place_refresh_returns_live_details_without_persisting_content(mo
         @staticmethod
         def json():
             return {
-                "id": "places/place-1",
+                "id": "place-1",
                 "displayName": {"text": "Entreprise locale"},
                 "formattedAddress": "Marrakech",
                 "googleMapsUri": "https://maps.google.com/?cid=1",
@@ -145,12 +164,33 @@ def test_google_place_refresh_returns_live_details_without_persisting_content(mo
         return Response()
 
     monkeypatch.setattr(data_sources.requests, "get", get)
-    result = data_sources.place_details("places-test-key", ["places/place-1"])[0]
-    assert captured[0][0].endswith("/places%2Fplace-1")
+    result = data_sources.place_details("places-test-key", ["place-1"])[0]
+    assert captured[0][0].endswith("/places/place-1")
     assert captured[0][1]["X-Goog-Api-Key"] == "places-test-key"
     assert result["title"] == "Entreprise locale"
-    assert result["external_id"] == "places/place-1"
+    assert result["external_id"] == "place-1"
     assert result["attribution"] == "Google Maps"
+
+
+def test_ai_provider_errors_do_not_chain_request_details(monkeypatch):
+    from requests import RequestException
+
+    secret = "sensitive-provider-key"
+
+    def fail_request(*args, **kwargs):
+        error = RequestException(f"failed request with {secret}")
+        raise error
+
+    monkeypatch.setattr(C, "GROQ_API_KEY", secret)
+    monkeypatch.setattr(C, "ANTHROPIC_API_KEY", "")
+    monkeypatch.setattr(ai.requests, "post", fail_request)
+    try:
+        ai.complete("system", [{"role": "user", "content": "hello"}])
+    except ai.AIError as error:
+        assert secret not in str(error)
+        assert error.__suppress_context__
+    else:
+        raise AssertionError("Failed provider requests must be surfaced as safe integration errors.")
 
 
 def test_jooble_import_adds_selected_offer_to_account_tracking(monkeypatch):

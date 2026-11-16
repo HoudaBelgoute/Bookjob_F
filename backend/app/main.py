@@ -1914,8 +1914,8 @@ def import_data_source_results(body: SourceImportIn):
         place_ids = list(dict.fromkeys(state.get("savedGooglePlaces", [])))
         previous_count = len(place_ids)
         place_ids.extend(place_id for place_id in body.item_ids if place_id not in place_ids)
-        if len(place_ids) > 100:
-            raise HTTPException(400, "Tu peux enregistrer au maximum 100 lieux Google Places.")
+        if len(place_ids) > 20:
+            raise HTTPException(400, "Tu peux enregistrer au maximum 20 lieux Google Places.")
         state["savedGooglePlaces"] = place_ids
         S.save_state(state)
         return {

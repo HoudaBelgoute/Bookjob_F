@@ -1,7 +1,7 @@
 """Recherches à la demande dans des sources autorisées et normalisation des aperçus."""
 from datetime import datetime, timezone
 import hashlib
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import requests
 
@@ -15,6 +15,17 @@ class DataSourceError(Exception):
 def _identifier(provider: str, external_id: str, title: str, url: str) -> str:
     value = external_id or url or title
     return hashlib.sha256(f"{provider}:{value}".encode("utf-8")).hexdigest()[:24]
+
+
+def _http_url(value) -> str:
+    url = str(value or "").strip()
+    try:
+        parsed = urlsplit(url)
+        hostname = parsed.hostname
+        parsed.port
+    except ValueError:
+        return ""
+    return url if parsed.scheme in {"http", "https"} and hostname and not parsed.username and not parsed.password else ""
 
 
 def _places(key: str, query: str, location: str) -> list[dict]:
@@ -41,7 +52,7 @@ def _places(key: str, query: str, location: str) -> list[dict]:
         if not name:
             continue
         external_id = str(place.get("id", ""))
-        url = place.get("googleMapsUri", "")
+        url = _http_url(place.get("googleMapsUri"))
         results.append({
             "id": _identifier("google_places", external_id, name, url),
             "external_id": external_id,
@@ -53,7 +64,7 @@ def _places(key: str, query: str, location: str) -> list[dict]:
             "sector": (place.get("primaryTypeDisplayName") or {}).get("text", ""),
             "location": place.get("formattedAddress", location),
             "phone": place.get("nationalPhoneNumber", ""),
-            "website": place.get("websiteUri", ""),
+            "website": _http_url(place.get("websiteUri")),
             "url": url,
             "description": "",
             "retrieved_at": retrieved_at,
@@ -82,7 +93,7 @@ def _jooble(key: str, query: str, location: str) -> list[dict]:
         if not title:
             continue
         company = str(job.get("company", "") or "").strip()
-        url = str(job.get("link", "") or "")
+        url = _http_url(job.get("link"))
         external_id = str(job.get("id", "") or "")
         results.append({
             "id": _identifier("jooble", external_id, title, url),
@@ -153,8 +164,8 @@ def place_details(key: str, place_ids: list[str]) -> list[dict]:
             "sector": (place.get("primaryTypeDisplayName") or {}).get("text", ""),
             "location": place.get("formattedAddress", ""),
             "phone": place.get("nationalPhoneNumber", ""),
-            "website": place.get("websiteUri", ""),
-            "url": place.get("googleMapsUri", ""),
+            "website": _http_url(place.get("websiteUri")),
+            "url": _http_url(place.get("googleMapsUri")),
             "description": "",
             "retrieved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "attribution": "Google Maps",

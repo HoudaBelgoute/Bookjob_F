@@ -127,10 +127,10 @@ def complete(system: str, messages: list[dict], max_tokens: int = 2000) -> str:
         if name == "anthropic":
             return "".join(part["text"] for part in response["content"] if part["type"] == "text")
         return response["choices"][0]["message"]["content"]
-    except requests.RequestException as ex:
-        raise AIError("Le fournisseur IA n'a pas pu traiter la demande.") from ex
-    except (KeyError, IndexError, TypeError) as ex:
-        raise AIError("Le fournisseur IA a renvoyé une réponse invalide.") from ex
+    except requests.RequestException:
+        raise AIError("Le fournisseur IA n'a pas pu traiter la demande.") from None
+    except (KeyError, IndexError, TypeError):
+        raise AIError("Le fournisseur IA a renvoyé une réponse invalide.") from None
 
 
 CV_SYSTEM = """Tu rédiges en français un CV d'une page compatible ATS et un e-mail de candidature pour un stage.
