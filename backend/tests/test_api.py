@@ -213,6 +213,7 @@ def test_personal_ai_key_api_never_returns_the_key(monkeypatch):
         assert key == personal_key
 
     monkeypatch.setattr(C, "AI_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(C, "API_KEY_ENCRYPTION_KEY", "")
     monkeypatch.setattr(ai, "test_api_key", validate_key)
 
     rejected = c.post("/api/ai/key", json={"api_key": "x" * 513})

@@ -21,6 +21,7 @@ DEFAULT_STATE = {
     "settings": {
         "emailAlerts": True,
         "useProfileForAI": True,
+        "aiProvider": "auto",
         "automaticFollowups": False,
         "onboardingCompleted": False,
         "weeklyGoal": 0,
@@ -28,6 +29,8 @@ DEFAULT_STATE = {
     "chats": [],
     "cvs": [],          # [{id, name, file, size, uploaded, main}]
     "home": None,       # {lat, lon, label}
+    "dataSourceReviews": {},
+    "savedGooglePlaces": [],
 }
 
 _TABLES = {"user_state": "data", "user_profile": "data", "user_tracking": "rows"}

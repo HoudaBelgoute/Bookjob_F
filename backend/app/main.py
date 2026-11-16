@@ -31,7 +31,7 @@ import sys
 
 # Fonctionne quel que soit le mode de chargement (uvicorn app.main:app, Vercel "app/main.py", etc.)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app import accounts, ai, application_stats, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_followups, email_sync, gmail, google_login, matching, store as S
+from app import accounts, ai, application_stats, companies as co, config as C, data_sources, dash_dashboard, email_confirmations, email_discovery, email_followups, email_sync, gmail, google_login, integrations, matching, store as S
 
 app = FastAPI(title="BookJob API", version="1.0")
 
@@ -526,7 +526,7 @@ def meta():
     return {
         "secteurs": sorted(d.Secteur.unique()), "quartiers": sorted(d.Quartier.unique()), "priorites": ["A", "B", "C"],
         "statuts": C.STATUTS, "sources": C.SOURCES, "total_entreprises": int(len(d)),
-        "ai": {"enabled": ai_provider == "groq", "provider": ai_provider},
+        "ai": {"enabled": ai_provider in {"groq", "anthropic"}, "provider": ai_provider},
         "email": gmail.status(),
         "google_geocoding": bool(C.GOOGLE_API_KEY),
         "secteur_counts": d.Secteur.value_counts().to_dict(),
@@ -623,6 +623,18 @@ class TrackIn(BaseModel):
     email: str = ""
     statut: str = "Brouillon"
     remarque: str = ""
+
+
+class SourceSearchIn(BaseModel):
+    provider: str
+    query: str = Field(min_length=1, max_length=150)
+    location: str = Field(default="", max_length=100)
+
+
+class SourceImportIn(BaseModel):
+    provider: str
+    review_id: str = Field(default="", max_length=40)
+    item_ids: list[str] = Field(min_length=1, max_length=20)
 
 
 class TrackPatch(BaseModel):
@@ -1823,6 +1835,8 @@ def get_settings():
 
 @app.put("/api/settings")
 def put_settings(body: dict):
+    if "aiProvider" in body and body["aiProvider"] not in {"auto", "groq", "anthropic"}:
+        raise HTTPException(400, "Le fournisseur IA doit être auto, groq ou anthropic.")
     if "weeklyGoal" in body:
         goal = body["weeklyGoal"]
         if isinstance(goal, bool) or not isinstance(goal, int) or not 0 <= goal <= 50:
@@ -1839,6 +1853,166 @@ def put_settings(body: dict):
     return st["settings"]
 
 
+@app.get("/api/integrations/keys")
+def get_integration_key_status():
+    return {"items": integrations.all_key_statuses()}
+
+
+@app.post("/api/integrations/keys/{provider}")
+async def save_integration_key(provider: str, request: Request):
+    if provider not in integrations.PROVIDERS:
+        raise HTTPException(404, "Fournisseur non pris en charge.")
+    raw_body = await request.body()
+    if len(raw_body) > 8192:
+        raise HTTPException(413, "La requête est trop volumineuse.")
+    try:
+        body = json.loads(raw_body)
+    except (ValueError, json.JSONDecodeError):
+        raise HTTPException(400, "Requête de clé invalide.") from None
+    key = body.get("api_key") if isinstance(body, dict) else None
+    if not isinstance(key, str) or not key.strip() or len(key) > 4096 or "\n" in key or "\r" in key:
+        raise HTTPException(400, "Saisis une clé API valide.")
+    try:
+        integrations.save_key(provider, key)
+    except integrations.IntegrationError as ex:
+        status = 503 if "chiffré" in str(ex) or "chiffrement" in str(ex) else 400
+        raise HTTPException(status, str(ex)) from ex
+    return integrations.key_status(provider)
+
+
+@app.delete("/api/integrations/keys/{provider}")
+def delete_integration_key(provider: str):
+    try:
+        integrations.remove_key(provider)
+        return integrations.key_status(provider)
+    except integrations.IntegrationError as ex:
+        raise HTTPException(404, str(ex)) from ex
+
+
+@app.post("/api/data-sources/search")
+def search_data_source(body: SourceSearchIn):
+    try:
+        items = data_sources.search(body.provider, body.query, body.location)
+    except data_sources.DataSourceError as ex:
+        raise HTTPException(400, str(ex)) from ex
+    review_id = ""
+    if body.provider == "jooble":
+        review_id = uuid.uuid4().hex
+        state = S.load_state()
+        reviews = state.setdefault("dataSourceReviews", {})
+        reviews[review_id] = items
+        for old_id in list(reviews)[:-4]:
+            del reviews[old_id]
+        S.save_state(state)
+    return {"review_id": review_id, "provider": body.provider, "items": items}
+
+
+@app.post("/api/data-sources/import")
+def import_data_source_results(body: SourceImportIn):
+    state = S.load_state()
+    if body.provider == "google_places":
+        place_ids = list(dict.fromkeys(state.get("savedGooglePlaces", [])))
+        previous_count = len(place_ids)
+        place_ids.extend(place_id for place_id in body.item_ids if place_id not in place_ids)
+        if len(place_ids) > 100:
+            raise HTTPException(400, "Tu peux enregistrer au maximum 100 lieux Google Places.")
+        state["savedGooglePlaces"] = place_ids
+        S.save_state(state)
+        return {
+            "imported": [], "duplicates": len(body.item_ids) - (len(place_ids) - previous_count),
+            "added_count": len(place_ids) - previous_count, "saved_place_ids": place_ids,
+        }
+    if body.provider != "jooble":
+        raise HTTPException(400, "Source de données non prise en charge.")
+    review = state.get("dataSourceReviews", {}).get(body.review_id)
+    if review is None:
+        raise HTTPException(404, "Cet aperçu n'existe plus. Relance la recherche.")
+    requested = set(body.item_ids)
+    selected = [item for item in review if item["id"] in requested]
+    if len(selected) != len(requested):
+        raise HTTPException(400, "Certains résultats sélectionnés ne sont pas dans cet aperçu.")
+
+    tracking = S.load_tracking()
+    imported, duplicates = [], 0
+    for item in selected:
+        source = item["source"]
+        company = item["company"] or "Employeur non précisé"
+        title = item["title"]
+        link = item["url"]
+        same_source = tracking["Source"] == source
+        if (link and ((same_source) & (tracking["Lien_offre"] == link)).any()) or (
+            (same_source) & (tracking["Entreprise"].astype(str).str.lower() == company.lower())
+            & (tracking["Poste_visé"].astype(str).str.lower() == title.lower())
+        ).any():
+            duplicates += 1
+            continue
+
+        number = 1 + sum(str(value).startswith("EXT-") for value in tracking["ID"])
+        tracking_id = f"EXT-{number:03d}"
+        while (tracking["ID"] == tracking_id).any():
+            number += 1
+            tracking_id = f"EXT-{number:03d}"
+        provenance = f"Récupéré via {source} le {item['retrieved_at']}."
+        details = []
+        if item["kind"] == "company":
+            details.extend(part for part in [
+                f"Adresse : {item['location']}" if item["location"] else "",
+                f"Téléphone : {item['phone']}" if item["phone"] else "",
+                f"Site : {item['website']}" if item["website"] else "",
+                f"Identifiant fournisseur : {item['external_id']}" if item["external_id"] else "",
+            ] if part)
+        elif item["description"]:
+            details.append(item["description"])
+        remark = " ".join([provenance, *details])[:5000]
+        row = {column: "" for column in C.COLS}
+        row.update(
+            ID=tracking_id,
+            Entreprise=company,
+            Secteur=item["sector"],
+            Poste_visé=title if item["kind"] == "job" else "Stage / candidature spontanée",
+            Source=source,
+            Lien_offre=link,
+            Statut="Brouillon",
+            Remarque=remark,
+            Date_modification=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        )
+        tracking = pd.concat([tracking, pd.DataFrame([row])], ignore_index=True)
+        imported.append(_track_out(row))
+
+    S.save_tracking(tracking)
+    del state["dataSourceReviews"][body.review_id]
+    S.save_state(state)
+    return {"imported": imported, "duplicates": duplicates, "saved_place_ids": state.get("savedGooglePlaces", [])}
+
+
+@app.get("/api/data-sources/places")
+def saved_google_places():
+    return {"place_ids": S.load_state().get("savedGooglePlaces", [])}
+
+
+@app.delete("/api/data-sources/places/{place_id}")
+def delete_saved_google_place(place_id: str):
+    state = S.load_state()
+    before = state.get("savedGooglePlaces", [])
+    state["savedGooglePlaces"] = [saved_id for saved_id in before if saved_id != place_id]
+    S.save_state(state)
+    return {"place_ids": state["savedGooglePlaces"]}
+
+
+@app.post("/api/data-sources/places/refresh")
+def refresh_google_places():
+    place_ids = S.load_state().get("savedGooglePlaces", [])
+    if not place_ids:
+        return {"items": []}
+    try:
+        key = integrations.resolve_key("google_places")
+        if not key:
+            raise data_sources.DataSourceError("Configure une clé Google Places personnelle ou serveur.")
+        return {"items": data_sources.place_details(key, place_ids)}
+    except (integrations.IntegrationError, data_sources.DataSourceError) as ex:
+        raise HTTPException(400, str(ex)) from ex
+
+
 @app.get("/api/ai/key")
 def get_ai_key_status():
     return ai.key_status()
@@ -1846,11 +2020,11 @@ def get_ai_key_status():
 
 @app.post("/api/ai/key")
 async def save_ai_key(request: Request):
-    content_length = request.headers.get("content-length", "")
-    if content_length.isdigit() and int(content_length) > 4096:
+    raw_body = await request.body()
+    if len(raw_body) > 8192:
         raise HTTPException(413, "La requête est trop volumineuse.")
     try:
-        body = await request.json()
+        body = json.loads(raw_body)
     except (ValueError, json.JSONDecodeError):
         raise HTTPException(400, "Requête de clé invalide.") from None
     key = body.get("api_key") if isinstance(body, dict) else None
