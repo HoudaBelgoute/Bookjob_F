@@ -18,10 +18,48 @@ export default function SettingsPage() {
   const { signOut: authSignOut } = useAuth()
   const [busy, setBusy] = useState(false)
   const [gmailConnected, setGmailConnected] = useState(Boolean(meta?.email?.connected))
+  const [aiKeyStatus, setAiKeyStatus] = useState(null)
+  const [aiKeyInput, setAiKeyInput] = useState('')
+  const [aiKeyBusy, setAiKeyBusy] = useState(false)
+  const [aiKeyError, setAiKeyError] = useState('')
 
   useEffect(() => {
     setGmailConnected(Boolean(meta?.email?.connected))
   }, [meta?.email?.connected])
+
+  useEffect(() => {
+    api.aiKeyStatus()
+      .then(setAiKeyStatus)
+      .catch((error) => setAiKeyError(error.message || 'Impossible de charger le statut de la clé IA.'))
+  }, [])
+
+  const saveAiKey = async (event) => {
+    event.preventDefault()
+    setAiKeyBusy(true)
+    setAiKeyError('')
+    try {
+      setAiKeyStatus(await api.saveAiKey(aiKeyInput))
+      setAiKeyInput('')
+      notify('Clé Groq vérifiée et enregistrée de façon chiffrée')
+    } catch (error) {
+      setAiKeyError(error.message || 'Impossible de vérifier cette clé.')
+    } finally {
+      setAiKeyBusy(false)
+    }
+  }
+
+  const removeAiKey = async () => {
+    setAiKeyBusy(true)
+    setAiKeyError('')
+    try {
+      setAiKeyStatus(await api.deleteAiKey())
+      notify('Clé personnelle supprimée')
+    } catch (error) {
+      setAiKeyError(error.message || 'Impossible de supprimer cette clé.')
+    } finally {
+      setAiKeyBusy(false)
+    }
+  }
 
   const refine = async () => {
     setBusy(true)
@@ -68,7 +106,60 @@ export default function SettingsPage() {
       <section className="card mt-8 divide-y divide-line px-6">
         <Toggle checked={!!settings.useProfileForAI} onChange={(v) => setSetting({ useProfileForAI: v })} label="Autoriser l’IA à utiliser mon profil" hint="Désactivé : l’assistant ne reçoit aucune donnée personnelle." />
         <div className="py-4 text-[13px] text-muted">
-          <strong className="text-ink">Fournisseur IA :</strong> {meta.ai.enabled ? meta.ai.provider : 'aucun (mode modèle)'} — les clés restent sur le serveur (variables d’environnement), jamais dans le navigateur.
+          <strong className="text-ink">Mode IA :</strong>{' '}
+          {aiKeyStatus?.mode === 'personal' ? 'Clé Groq personnelle chiffrée' :
+            aiKeyStatus?.mode === 'server' ? 'Configuration serveur partagée' :
+              aiKeyStatus?.mode === 'unavailable' ? 'Clé personnelle indisponible : vérifiez la configuration de chiffrement' :
+                aiKeyStatus?.mode === 'none' ? 'Mode modèle sans fournisseur externe' : 'Chargement…'}
+          <p className="mt-1">Seul Groq est pris en charge. La clé n’est jamais renvoyée au navigateur; une clé personnelle est chiffrée au repos. Sans clé personnelle, la configuration serveur est utilisée si elle existe.</p>
+        </div>
+        {aiKeyStatus?.encryption_available && (
+          <form onSubmit={saveAiKey} className="space-y-3 py-4">
+            <label htmlFor="groq-api-key" className="block text-[13px] font-semibold">Clé API Groq personnelle</label>
+            <div className="flex flex-wrap gap-2">
+              <input
+                id="groq-api-key"
+                type="password"
+                autoComplete="new-password"
+                value={aiKeyInput}
+                onChange={(event) => setAiKeyInput(event.target.value)}
+                placeholder={aiKeyStatus.personal_key_configured ? 'Remplacer la clé enregistrée' : 'Coller une clé Groq'}
+                className="min-w-[220px] flex-1 rounded-xl border border-line bg-white px-3.5 py-2.5 text-[14px] outline-none focus:border-primary"
+                aria-describedby="groq-api-key-help"
+              />
+              <button type="submit" className="btn-primary" disabled={aiKeyBusy || !aiKeyInput.trim()}>
+                {aiKeyBusy ? 'Vérification…' : 'Vérifier et enregistrer'}
+              </button>
+            </div>
+            <p id="groq-api-key-help" className="text-[12px] text-muted">
+              {aiKeyStatus.personal_key_configured
+                ? `Enregistrée : ${aiKeyStatus.masked_key}. Enregistrer une nouvelle clé la remplacera.`
+                : 'La clé est vérifiée auprès de Groq avant son enregistrement chiffré.'}
+            </p>
+            {aiKeyStatus.personal_key_configured && (
+              <button type="button" className="text-[13px] font-semibold text-red-600 underline" disabled={aiKeyBusy} onClick={removeAiKey}>
+                Supprimer ma clé et revenir au mode serveur
+              </button>
+            )}
+          </form>
+        )}
+        {aiKeyError && <p role="alert" className="pb-4 text-[13px] text-red-700">{aiKeyError}</p>}
+        {aiKeyStatus && !aiKeyStatus.encryption_available && (
+          <div className="space-y-2 py-4">
+            <p className="text-[13px] text-muted">
+              L’enregistrement d’une clé personnelle n’est pas activé sur ce serveur. Les paramètres peuvent être revus par l’administrateur; aucune nouvelle clé n’est stockée sans chiffrement.
+            </p>
+            {aiKeyStatus?.personal_key_configured && (
+              <button type="button" className="text-[13px] font-semibold text-red-600 underline" disabled={aiKeyBusy} onClick={removeAiKey}>
+                Supprimer la clé personnelle indisponible
+              </button>
+            )}
+          </div>
+        )}
+        <div className="py-4">
+          <button type="button" className="btn-outline" onClick={() => setSetting({ onboardingCompleted: false })}>
+            Revoir le guide de démarrage
+          </button>
         </div>
       </section>
 

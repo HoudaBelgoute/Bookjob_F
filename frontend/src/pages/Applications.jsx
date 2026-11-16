@@ -25,6 +25,12 @@ function formatEmailDate(value) {
     : date.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+function followupDraftUrl(app) {
+  const subject = `Suivi de ma candidature – ${app.poste || 'stage'} – ${app.entreprise}`
+  const body = `Bonjour,\n\nJe me permets de revenir vers vous au sujet de ma candidature pour ${app.poste || 'un stage'} chez ${app.entreprise}, envoyée le ${app.date_candidature || 'date non renseignée'}.\n\nJe reste disponible pour tout complément d'information ou entretien.\n\nCordialement,`
+  return `mailto:${encodeURIComponent(app.email || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
 function Card({ app, statuts, onMenu, menuOpen, onMove, onRemove, onEdit, onOpen, onDetails }) {
   const idx = statuts.indexOf(app.statut)
   const last = idx === statuts.length - 1
@@ -56,7 +62,15 @@ function Card({ app, statuts, onMenu, menuOpen, onMove, onRemove, onEdit, onOpen
         {app.lien_offre && <a href={app.lien_offre} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-primary hover:underline"><ExternalLink size={14} />Rouvrir la recherche Indeed</a>}
       </div>
       {app.relance_due && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-gold-soft px-3 py-2 text-[12px] font-semibold text-gold-ink"><Bell size={14} />Relance à faire ({fmtDate(app.date_relance)})</div>
+        <div className="mt-3 rounded-lg bg-gold-soft px-3 py-2 text-[12px] font-semibold text-gold-ink">
+          <p className="flex items-center gap-2"><Bell size={14} />Relance à faire ({fmtDate(app.date_relance)})</p>
+          {app.followup_day > 0 && (
+            <a href={followupDraftUrl(app)} onClick={(event) => event.stopPropagation()} className="mt-2 inline-flex items-center gap-1 underline">
+              <Mail size={13} />Préparer un brouillon J+{app.followup_day}
+            </a>
+          )}
+          {app.followup_day > 0 && <p className="mt-1 font-normal">Vérifiez d’abord votre boîte de réception; ce brouillon n’est pas envoyé automatiquement.</p>}
+        </div>
       )}
       {app.date_entretien && <p className="mt-3 rounded-lg bg-success-soft px-3 py-2 text-[12px] font-semibold text-success">Entretien prévu le {fmtDate(app.date_entretien)}</p>}
       {app.remarque && <p className="mt-3 line-clamp-2 text-[12px] italic text-muted">{app.remarque}</p>}
@@ -238,6 +252,7 @@ export default function Applications() {
               </p>
               {emailSync?.status === 'error' && emailSync.error && emailSync.error !== emailSyncError && <p role="alert" className="mt-1 text-[13px] text-red-700">{emailSync.error}</p>}
               {emailSyncError && <p role="alert" className="mt-1 text-[13px] text-red-700">{emailSyncError}</p>}
+              <p className="mt-1 text-[12px] text-muted">Les extraits proviennent des messages Gmail et restent visibles dans ton espace privé. Les réponses sans date ou association suffisamment fiable demandent une confirmation manuelle.</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -322,6 +337,7 @@ export default function Applications() {
                             <span className="inline-flex items-center gap-1 rounded-full bg-gold-soft px-2.5 py-1 text-[10px] font-semibold text-gold-ink">
                               <Sparkles size={12} />À vérifier
                             </span>
+                            <span className="rounded-full bg-chip px-2.5 py-1 text-[10px] font-medium text-muted">{message.classification}</span>
                           </div>
                           {senderName && <p className="mt-0.5 break-all text-[11px] text-muted">{senderAddress}</p>}
                           <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
@@ -331,9 +347,10 @@ export default function Applications() {
                       </div>
                       <h4 className="mt-4 break-words text-[15px] font-semibold leading-snug text-navy-900">{message.subject || '(sans objet)'}</h4>
                       {message.snippet && (
-                        <p className="mt-2 line-clamp-3 rounded-xl border border-line/70 bg-white/80 px-3.5 py-3 text-[12px] leading-relaxed text-muted">
-                          {message.snippet}
-                        </p>
+                        <div className="mt-2 rounded-xl border border-line/70 bg-white/80 px-3.5 py-3">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">Extrait du message Gmail</p>
+                          <p className="line-clamp-3 text-[12px] leading-relaxed text-muted">{message.snippet}</p>
+                        </div>
                       )}
                     </div>
                     <div className="space-y-3 p-4 sm:p-5">
@@ -472,6 +489,7 @@ export default function Applications() {
                   </td>
                   <td className="px-5 py-3">{a.fichier_cv ? <a className="text-primary hover:underline" href={cvUrl(a.id)}>Télécharger</a> : '—'}</td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
+                    {a.followup_day > 0 && <a href={followupDraftUrl(a)} className="mr-3 text-[13px] text-primary hover:underline">Brouillon J+{a.followup_day}</a>}
                     <button onClick={() => setDetails(a)} className="mr-3 text-[13px] text-primary hover:underline">Détails</button>
                     <button onClick={() => setEdit(a)} className="mr-3 text-[13px] text-primary hover:underline">Modifier</button>
                     <button onClick={() => confirm(`Supprimer « ${a.short} » ?`) && removeTracking(a.id)} className="text-[13px] text-red-600 hover:underline">Supprimer</button>

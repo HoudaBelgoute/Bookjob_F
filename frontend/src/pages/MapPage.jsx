@@ -88,7 +88,7 @@ export default function MapPage() {
       <p className="eyebrow">Localisation</p>
       <h1 className="page-title mt-3">Carte & distance</h1>
       <p className="mt-3 max-w-3xl text-[14px] text-muted">
-        Les positions sont au niveau du quartier (l’export Google Places ne contient pas de coordonnées GPS) : suffisant pour estimer un trajet, pas pour naviguer.
+        Les distances affichées sont à vol d’oiseau, pas des trajets ni des temps de transport. Les positions non géocodées restent approximatives au niveau du quartier.
         {meta.google_geocoding && ' Une clé de géocodage est configurée : vous pouvez affiner les adresses depuis les Paramètres.'}
       </p>
 

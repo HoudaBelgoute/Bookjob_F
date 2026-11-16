@@ -123,5 +123,6 @@ PROFILE_FIELDS = ["nom", "prenom", "nom_famille", "titre", "email", "tel", "vill
 # IA : Groq uniquement.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+AI_KEY_ENCRYPTION_KEY = os.getenv("BOOKJOB_AI_KEY_ENCRYPTION_KEY", "")
 # Géocodage précis optionnel (sinon : position approximative au niveau du quartier)
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")

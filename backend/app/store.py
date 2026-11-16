@@ -23,6 +23,7 @@ DEFAULT_STATE = {
         "useProfileForAI": True,
         "automaticFollowups": False,
         "onboardingCompleted": False,
+        "weeklyGoal": 0,
     },
     "chats": [],
     "cvs": [],          # [{id, name, file, size, uploaded, main}]

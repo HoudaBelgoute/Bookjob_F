@@ -3,7 +3,7 @@ import base64
 import re
 import threading
 import unicodedata
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from email.utils import parseaddr
 
 import pandas as pd
@@ -19,7 +19,14 @@ _STOP_WORDS = {
 _CLASSIFIERS = [
     (
         "Entretien programmé",
-        re.compile(r"\b(entretien|interview|meeting invitation|schedule an interview|convocation)\b", re.I),
+        re.compile(
+            r"(interview invitation|invitation to interview|meeting invitation|"
+            r"schedule an interview|please select a time.{0,40}interview|"
+            r"would you be available for an interview|"
+            r"(?:convocation|invitation).{0,40}(?:entretien|interview)|"
+            r"(?:entretien|interview).{0,40}(?:convocation|invitation|proposé|programmé|confirmé))",
+            re.I,
+        ),
     ),
     (
         "Refusée",
@@ -41,11 +48,23 @@ _CLASSIFIERS = [
         ),
     ),
     (
-        "En cours de traitement",
+        "Demande de documents",
         re.compile(
-            r"(informations? supplémentaires?|additional information|"
-            r"please provide|veuillez nous transmettre|documents? manquants?|"
-            r"application is under review|candidature est en cours d'étude)",
+            r"(please provide.{0,50}(?:document|diploma|certificate|cv|resume)|"
+            r"veuillez nous transmettre.{0,40}(?:document|diplôme|justificatif|cv|attestation)|"
+            r"merci de nous transmettre.{0,40}(?:document|diplôme|justificatif|cv|attestation)|"
+            r"documents? manquants?|additional documents|"
+            r"document[s]? (?:required|missing)|"
+            r"supporting documents|justificatifs? manquants?)",
+            re.I,
+        ),
+    ),
+    (
+        "Relance demandée",
+        re.compile(
+            r"(n['’]hésitez pas à nous relancer|merci de nous relancer|"
+            r"n['’]hésitez pas à nous recontacter|"
+            r"please (?:feel free to )?follow up with us|feel free to reach out again)",
             re.I,
         ),
     ),
@@ -59,6 +78,10 @@ _CLASSIFIERS = [
         ),
     ),
 ]
+_CLASSIFICATION_STATUSES = {
+    "Demande de documents": "En cours de traitement",
+    "Relance demandée": "En cours de traitement",
+}
 
 
 def _normalized(text: str) -> str:
@@ -70,9 +93,26 @@ def classify_message(subject: str, body: str) -> tuple[str, float] | None:
     content = f"{subject}\n{body}"
     for status, pattern in _CLASSIFIERS:
         if pattern.search(content):
-            confidence = 0.94 if status in {"Refusée", "Acceptée", "Entretien programmé"} else 0.86
+            confidence = 0.94 if status in {"Refusée", "Acceptée", "Entretien programmé"} else 0.88
             return status, confidence
     return None
+
+
+def auto_update_eligible(
+    match_index: int | None,
+    match_confidence: float,
+    classifier_confidence: float,
+    received_at: str,
+    application_sent_at: str,
+) -> bool:
+    if match_index is None or match_confidence < 0.82 or classifier_confidence < 0.85:
+        return False
+    try:
+        received_date = date.fromisoformat(received_at[:10])
+        application_date = date.fromisoformat(application_sent_at[:10])
+    except (TypeError, ValueError):
+        return False
+    return received_date >= application_date
 
 
 def _message_text(part: dict) -> str:
@@ -220,14 +260,20 @@ def sync_user(user_id: str) -> dict:
                     added += 1
                 continue
 
-            suggested_status, classifier_confidence = classification
-            auto_match = match_index is not None and match_confidence >= 0.82 and classifier_confidence >= 0.85
-            tracking_id = str(data.loc[match_index, "ID"]) if auto_match else None
+            classification_label, classifier_confidence = classification
             received_at = _received_at(message)
+            suggested_status = _CLASSIFICATION_STATUSES.get(classification_label, classification_label)
+            application_sent_at = (
+                str(eligible.loc[match_index, "Date_candidature"]) if match_index is not None else ""
+            )
+            auto_match = auto_update_eligible(
+                match_index, match_confidence, classifier_confidence, received_at, application_sent_at,
+            )
+            tracking_id = str(eligible.loc[match_index, "ID"]) if auto_match else None
             record = {
                 "message_id": message_id,
                 "tracking_id": tracking_id,
-                "classification": suggested_status,
+                "classification": classification_label,
                 "confidence": min(classifier_confidence, match_confidence) if auto_match else classifier_confidence,
                 "subject": subject,
                 "sender": sender,

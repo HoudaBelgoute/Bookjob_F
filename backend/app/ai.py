@@ -3,13 +3,110 @@ Fournisseur IA unique : Groq."""
 import json
 
 import requests
+from cryptography.fernet import Fernet, InvalidToken
 
 from . import config as C
 from .store import split_list
 
 
+def _secret_path():
+    if not C.current_user_id():
+        return None
+    return C.user_path(C.DATA_DIR / "secrets" / "groq-api-key.enc")
+
+
+def _cipher() -> Fernet:
+    if not C.AI_KEY_ENCRYPTION_KEY:
+        raise AIError("Le stockage chiffré des clés IA personnelles n'est pas configuré sur le serveur.")
+    try:
+        return Fernet(C.AI_KEY_ENCRYPTION_KEY.encode("ascii"))
+    except (ValueError, UnicodeEncodeError) as ex:
+        raise AIError("La configuration de chiffrement des clés IA est invalide.") from ex
+
+
+def personal_api_key() -> str:
+    path = _secret_path()
+    if path is None or not path.exists():
+        return ""
+    try:
+        return _cipher().decrypt(path.read_bytes()).decode("utf-8")
+    except (InvalidToken, UnicodeDecodeError) as ex:
+        raise AIError("La clé IA personnelle ne peut pas être déchiffrée avec la configuration actuelle.") from ex
+
+
+def api_key() -> str:
+    return personal_api_key() or C.GROQ_API_KEY
+
+
 def provider() -> str:
-    return "groq" if C.GROQ_API_KEY else "none"
+    try:
+        return "groq" if api_key() else "none"
+    except AIError:
+        return "unavailable"
+
+
+def key_status() -> dict:
+    path = _secret_path()
+    personal_configured = bool(path and path.exists())
+    try:
+        _cipher()
+        encryption_available = True
+    except AIError:
+        encryption_available = False
+    personal_key_usable = False
+    if personal_configured and encryption_available:
+        try:
+            personal_key_usable = bool(personal_api_key())
+        except AIError:
+            pass
+    if personal_configured and not personal_key_usable:
+        mode = "unavailable"
+    elif personal_configured:
+        mode = "personal"
+    elif C.GROQ_API_KEY:
+        mode = "server"
+    else:
+        mode = "none"
+    return {
+        "provider": "groq" if mode in {"personal", "server"} else "none",
+        "mode": mode,
+        "personal_key_configured": personal_configured,
+        "encryption_available": encryption_available,
+        "masked_key": "••••••••" if personal_configured else "",
+    }
+
+
+def test_api_key(key: str) -> None:
+    try:
+        response = requests.get(
+            "https://api.groq.com/openai/v1/models",
+            timeout=15,
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    except requests.RequestException as ex:
+        raise AIError("Impossible de joindre le fournisseur Groq pour vérifier la clé.") from ex
+    if response.status_code in {401, 403}:
+        raise AIError("Groq a refusé cette clé. Vérifie-la puis réessaie.")
+    if not response.ok:
+        raise AIError("Groq n'a pas pu vérifier la clé pour le moment.")
+
+
+def save_personal_api_key(key: str) -> None:
+    path = _secret_path()
+    if path is None:
+        raise AIError("Connexion BookJob requise pour enregistrer une clé personnelle.")
+    cleaned = key.strip()
+    if not cleaned or len(cleaned) > 512 or "\n" in cleaned or "\r" in cleaned:
+        raise AIError("Saisis une clé Groq valide.")
+    cipher = _cipher()
+    test_api_key(cleaned)
+    path.write_bytes(cipher.encrypt(cleaned.encode("utf-8")))
+
+
+def remove_personal_api_key() -> None:
+    path = _secret_path()
+    if path and path.exists():
+        path.unlink()
 
 
 def candidate_name(profile: dict) -> str:
@@ -21,13 +118,14 @@ class AIError(Exception):
 
 
 def complete(system: str, messages: list[dict], max_tokens: int = 2000) -> str:
-    if not C.GROQ_API_KEY:
-        raise AIError("Configure GROQ_API_KEY pour activer l’IA Groq.")
+    key = api_key()
+    if not key:
+        raise AIError("Configure une clé Groq personnelle dans les paramètres ou la clé serveur GROQ_API_KEY.")
     try:
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             timeout=120,
-            headers={"Authorization": f"Bearer {C.GROQ_API_KEY}"},
+            headers={"Authorization": f"Bearer {key}"},
             json={
                 "model": C.GROQ_MODEL,
                 "max_tokens": max_tokens,
@@ -36,8 +134,10 @@ def complete(system: str, messages: list[dict], max_tokens: int = 2000) -> str:
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
-    except Exception as ex:  # noqa: BLE001
-        raise AIError(str(ex)) from ex
+    except requests.RequestException as ex:
+        raise AIError("Le fournisseur IA n'a pas pu traiter la demande.") from ex
+    except (KeyError, IndexError, TypeError) as ex:
+        raise AIError("Le fournisseur IA a renvoyé une réponse invalide.") from ex
 
 
 CV_SYSTEM = """Tu rédiges en français un CV d'une page compatible ATS et un e-mail de candidature pour un stage.

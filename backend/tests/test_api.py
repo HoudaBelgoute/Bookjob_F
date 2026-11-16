@@ -20,7 +20,7 @@ os.environ["BOOKJOB_REGISTRATION_KEY"] = ""
 sys.path.insert(0, str(SRC))
 
 from fastapi.testclient import TestClient  # noqa: E402
-from app import accounts, config as C  # noqa: E402
+from app import accounts, ai, config as C  # noqa: E402
 from app.main import app  # noqa: E402
 
 C.DATA_DIR = tmp / "data"
@@ -197,7 +197,34 @@ def test_home_chat_dashboard():
     assert dsh["kpis"]["suivies"] >= 40 and len(dsh["recommandees"]) == 3
     assert c.post("/api/alerts", json={"query": "data"}).json()["items"]
     assert c.put("/api/settings", json={"emailAlerts": False}).json()["emailAlerts"] is False
+    assert c.put("/api/settings", json={"weeklyGoal": 4}).json()["weeklyGoal"] == 4
+    assert c.put("/api/settings", json={"weeklyGoal": 51}).status_code == 400
+    dashboard = c.get("/api/dashboard").json()
+    assert dashboard["weekly_goal"] == 4 and dashboard["weekly_progress"] >= 0
     assert c.post("/api/geocode/companies").status_code == 400  # pas de clé Google
+
+
+def test_personal_ai_key_api_never_returns_the_key(monkeypatch):
+    from cryptography.fernet import Fernet
+
+    personal_key = "private-groq-test-key"
+
+    def validate_key(key):
+        assert key == personal_key
+
+    monkeypatch.setattr(C, "AI_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(ai, "test_api_key", validate_key)
+
+    rejected = c.post("/api/ai/key", json={"api_key": "x" * 513})
+    assert rejected.status_code == 400
+    assert "x" * 513 not in rejected.text
+
+    saved = c.post("/api/ai/key", json={"api_key": personal_key})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["personal_key_configured"] is True
+    assert personal_key not in saved.text
+    assert c.get("/api/ai/key").json()["masked_key"] == "••••••••"
+    assert c.delete("/api/ai/key").json()["personal_key_configured"] is False
 
 
 def test_onboarding_completion_is_saved_per_account():

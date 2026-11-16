@@ -1,10 +1,17 @@
 import { useCallback, useState } from 'react'
-import { ArrowLeft, ArrowRight, BriefcaseBusiness, CheckCircle2, Search, UserRound } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BriefcaseBusiness, CheckCircle2, Home, MapPin, Search, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Modal from './ui/Modal'
 import { useStore } from '../store/useStore'
 
 const STEPS = [
+  {
+    icon: Home,
+    title: 'Votre tableau de bord',
+    description: 'Retrouvez votre progression, vos candidatures récentes et les entreprises à explorer.',
+    action: 'Ouvrir le tableau de bord',
+    path: '/tableau-de-bord',
+  },
   {
     icon: UserRound,
     title: 'Préparez votre profil',
@@ -18,6 +25,13 @@ const STEPS = [
     description: 'Recherchez parmi les entreprises du répertoire, filtrez par secteur ou quartier, puis ouvrez une fiche pour consulter ses coordonnées.',
     action: 'Explorer les entreprises',
     path: '/rechercher',
+  },
+  {
+    icon: MapPin,
+    title: 'Repérez les entreprises',
+    description: 'La carte affiche les emplacements disponibles et des distances à vol d’oiseau, pas des itinéraires ni des temps de trajet.',
+    action: 'Voir la carte',
+    path: '/carte',
   },
   {
     icon: BriefcaseBusiness,

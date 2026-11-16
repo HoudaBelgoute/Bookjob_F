@@ -1,4 +1,101 @@
+from cryptography.fernet import Fernet
+
 from app import ai
+
+
+def test_personal_groq_key_is_tested_encrypted_and_never_returned(monkeypatch, tmp_path):
+    encrypted_path = tmp_path / "groq-api-key.enc"
+    monkeypatch.setattr(ai.C, "AI_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(ai.C, "GROQ_API_KEY", "server-key")
+    monkeypatch.setattr(ai.C, "user_path", lambda _path: encrypted_path)
+    owner_token = ai.C.set_current_user("test-user")
+    calls = []
+
+    class Response:
+        status_code = 200
+        ok = True
+
+    def get(url, *, timeout, headers):
+        calls.append((url, timeout, headers))
+        return Response()
+
+    monkeypatch.setattr(ai.requests, "get", get)
+    try:
+        ai.save_personal_api_key("personal-key")
+        status = ai.key_status()
+        assert encrypted_path.read_bytes() != b"personal-key"
+        assert ai.personal_api_key() == "personal-key"
+        assert ai.api_key() == "personal-key"
+        assert status == {
+            "provider": "groq",
+            "mode": "personal",
+            "personal_key_configured": True,
+            "encryption_available": True,
+            "masked_key": "••••••••",
+        }
+        assert "personal-key" not in repr(status)
+        assert calls == [(
+            "https://api.groq.com/openai/v1/models",
+            15,
+            {"Authorization": "Bearer personal-key"},
+        )]
+        ai.remove_personal_api_key()
+        assert ai.api_key() == "server-key"
+        assert ai.key_status()["mode"] == "server"
+    finally:
+        ai.C.reset_current_user(owner_token)
+
+
+def test_personal_key_is_not_saved_without_encryption_or_provider_acceptance(monkeypatch, tmp_path):
+    encrypted_path = tmp_path / "groq-api-key.enc"
+    monkeypatch.setattr(ai.C, "AI_KEY_ENCRYPTION_KEY", "")
+    monkeypatch.setattr(ai.C, "user_path", lambda _path: encrypted_path)
+    owner_token = ai.C.set_current_user("test-user")
+    try:
+        try:
+            ai.save_personal_api_key("personal-key")
+        except ai.AIError as error:
+            assert "stockage" in str(error)
+        else:
+            raise AssertionError("Expected encryption configuration to be required")
+        assert not encrypted_path.exists()
+
+        monkeypatch.setattr(ai.C, "AI_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+
+        class RejectedResponse:
+            status_code = 401
+            ok = False
+
+        monkeypatch.setattr(ai.requests, "get", lambda *args, **kwargs: RejectedResponse())
+        try:
+            ai.save_personal_api_key("invalid-key")
+        except ai.AIError as error:
+            assert "refusé" in str(error)
+        else:
+            raise AssertionError("Expected invalid provider key to be rejected")
+        assert not encrypted_path.exists()
+    finally:
+        ai.C.reset_current_user(owner_token)
+
+
+def test_unreadable_personal_key_does_not_silently_fall_back_to_server_key(monkeypatch, tmp_path):
+    encrypted_path = tmp_path / "groq-api-key.enc"
+    encrypted_path.write_bytes(b"not-a-fernet-token")
+    monkeypatch.setattr(ai.C, "AI_KEY_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr(ai.C, "GROQ_API_KEY", "server-key")
+    monkeypatch.setattr(ai.C, "user_path", lambda _path: encrypted_path)
+    owner_token = ai.C.set_current_user("test-user")
+    try:
+        assert ai.provider() == "unavailable"
+        assert ai.key_status()["mode"] == "unavailable"
+        try:
+            ai.api_key()
+        except ai.AIError:
+            pass
+        else:
+            raise AssertionError("Unreadable personal keys must not silently use the server key")
+    finally:
+        ai.C.reset_current_user(owner_token)
 
 
 def test_groq_completion_uses_groq_api_and_takes_precedence(monkeypatch):

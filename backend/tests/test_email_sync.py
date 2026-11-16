@@ -63,10 +63,31 @@ def test_classifier_recognizes_recruitment_outcomes_without_guessing():
     assert email_sync.classify_message(
         "Interview invitation", "Please select a time for your interview.",
     )[0] == "Entretien programmé"
+    assert email_sync.classify_message("Interview update", "We discussed the interview process.") is None
     assert email_sync.classify_message(
         "Application update", "We regret to inform you that you were not selected.",
     )[0] == "Refusée"
     assert email_sync.classify_message("Hello", "Thanks for your message.") is None
+
+
+def test_classifier_distinguishes_document_requests_and_followup_requests():
+    assert email_sync.classify_message(
+        "Documents required", "Please provide your diploma and supporting documents.",
+    )[0] == "Demande de documents"
+    assert email_sync.classify_message(
+        "Application update", "N’hésitez pas à nous relancer la semaine prochaine.",
+    )[0] == "Relance demandée"
+    assert email_sync._CLASSIFICATION_STATUSES["Demande de documents"] == "En cours de traitement"
+    assert email_sync._CLASSIFICATION_STATUSES["Relance demandée"] == "En cours de traitement"
+
+
+def test_automatic_email_status_update_requires_a_received_date_and_confident_match():
+    sent_at = "2026-11-10"
+    assert email_sync.auto_update_eligible(0, 0.9, 0.9, "2026-11-16T10:00:00+00:00", sent_at)
+    assert not email_sync.auto_update_eligible(0, 0.9, 0.9, "", sent_at)
+    assert not email_sync.auto_update_eligible(None, 0.9, 0.9, "2026-11-16T10:00:00+00:00", sent_at)
+    assert not email_sync.auto_update_eligible(0, 0.81, 0.9, "2026-11-16T10:00:00+00:00", sent_at)
+    assert not email_sync.auto_update_eligible(0, 0.9, 0.9, "2026-11-09T10:00:00+00:00", sent_at)
 
 
 def test_matching_leaves_tied_applications_for_manual_review():

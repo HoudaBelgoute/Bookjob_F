@@ -7,13 +7,40 @@ import { TONES, fmtDate } from '../data/data'
 import { useStore } from '../store/useStore'
 
 export default function Dashboard() {
-  const { tracking, favorites, profile } = useStore()
+  const { tracking, favorites, profile, settings, setSetting } = useStore()
   const [d, setD] = useState(null)
   const [err, setErr] = useState('')
+  const [goalDraft, setGoalDraft] = useState(String(settings.weeklyGoal || ''))
+  const [goalBusy, setGoalBusy] = useState(false)
 
   useEffect(() => {
     api.dashboard().then(setD).catch((e) => setErr(e.message))
   }, [tracking, favorites, profile])
+
+  useEffect(() => {
+    setGoalDraft(String(settings.weeklyGoal || ''))
+  }, [settings.weeklyGoal])
+
+  const saveWeeklyGoal = async (event) => {
+    event.preventDefault()
+    const goal = Number(goalDraft)
+    if (!Number.isInteger(goal) || goal < 1 || goal > 50) return
+    setGoalBusy(true)
+    try {
+      await setSetting({ weeklyGoal: goal })
+    } finally {
+      setGoalBusy(false)
+    }
+  }
+
+  const clearWeeklyGoal = async () => {
+    setGoalBusy(true)
+    try {
+      await setSetting({ weeklyGoal: 0 })
+    } finally {
+      setGoalBusy(false)
+    }
+  }
 
   if (err) return <p className="p-8 text-red-600">{err}</p>
   if (!d) return <p className="p-8 text-muted">Chargement…</p>
@@ -61,6 +88,46 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      <section className="card mt-5 p-5" aria-labelledby="weekly-goal-title">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 id="weekly-goal-title" className="text-[18px] font-medium">Objectif de la semaine</h2>
+            <p className="mt-1 text-[13px] text-muted">
+              {Number(settings.weeklyGoal) > 0
+                ? `${d.weekly_progress} candidature(s) envoyée(s) depuis lundi sur ${settings.weeklyGoal}.`
+                : `${d.weekly_progress} candidature(s) envoyée(s) depuis lundi. Choisissez un objectif personnel.`}
+            </p>
+          </div>
+          <form onSubmit={saveWeeklyGoal} className="flex items-end gap-2">
+            <label className="text-[12px] text-muted">
+              Cible hebdomadaire (1–50)
+              <input
+                type="number"
+                min="1"
+                max="50"
+                step="1"
+                value={goalDraft}
+                onChange={(event) => setGoalDraft(event.target.value)}
+                className="mt-1 block w-28 rounded-xl border border-line bg-white px-3 py-2 text-[14px] text-ink"
+              />
+            </label>
+            <button type="submit" className="btn-outline" disabled={goalBusy || !goalDraft || Number(goalDraft) < 1 || Number(goalDraft) > 50}>
+              {goalBusy ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+            {Number(settings.weeklyGoal) > 0 && (
+              <button type="button" className="text-[13px] text-muted underline" disabled={goalBusy} onClick={clearWeeklyGoal}>
+                Effacer
+              </button>
+            )}
+          </form>
+        </div>
+        {Number(settings.weeklyGoal) > 0 && (
+          <div className="mt-4 h-2 rounded-full bg-chip" role="progressbar" aria-label="Progression de l’objectif hebdomadaire" aria-valuemin="0" aria-valuemax={settings.weeklyGoal} aria-valuenow={Math.min(d.weekly_progress, settings.weeklyGoal)}>
+            <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${Math.min(100, d.weekly_progress / settings.weeklyGoal * 100)}%` }} />
+          </div>
+        )}
+      </section>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         {!profileDone && <section className="card p-6">

@@ -31,7 +31,7 @@ import sys
 
 # Fonctionne quel que soit le mode de chargement (uvicorn app.main:app, Vercel "app/main.py", etc.)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app import accounts, ai, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_followups, email_sync, gmail, google_login, matching, store as S
+from app import accounts, ai, application_stats, companies as co, config as C, dash_dashboard, email_confirmations, email_discovery, email_followups, email_sync, gmail, google_login, matching, store as S
 
 app = FastAPI(title="BookJob API", version="1.0")
 
@@ -413,6 +413,9 @@ def _track_out(r: dict, d: pd.DataFrame | None = None) -> dict:
         out.update(tone=c.Tone, quartier=c.Quartier, ville=c.Ville, company_id=c.ID, short=c.Nom_court, initials=c.Initiales,
                    logo_url=co.logo_url(c))
     out["relance_due"] = bool(r["Date_relance"] and r["Date_relance"] <= str(date.today()) and r["Statut"] in C.STATUTS_RELANCE)
+    out["followup_day"] = application_stats.followup_reminder_day(
+        str(r["Statut"]), str(r["Date_candidature"]), date.today(),
+    )
     return out
 
 
@@ -519,10 +522,11 @@ def _application_email_message(sender: str, request_data: dict) -> EmailMessage:
 @app.get("/api/meta")
 def meta():
     d = co.companies_df()
+    ai_provider = ai.provider()
     return {
         "secteurs": sorted(d.Secteur.unique()), "quartiers": sorted(d.Quartier.unique()), "priorites": ["A", "B", "C"],
         "statuts": C.STATUTS, "sources": C.SOURCES, "total_entreprises": int(len(d)),
-        "ai": {"enabled": ai.provider() != "none", "provider": ai.provider()},
+        "ai": {"enabled": ai_provider == "groq", "provider": ai_provider},
         "email": gmail.status(),
         "google_geocoding": bool(C.GOOGLE_API_KEY),
         "secteur_counts": d.Secteur.value_counts().to_dict(),
@@ -1819,6 +1823,10 @@ def get_settings():
 
 @app.put("/api/settings")
 def put_settings(body: dict):
+    if "weeklyGoal" in body:
+        goal = body["weeklyGoal"]
+        if isinstance(goal, bool) or not isinstance(goal, int) or not 0 <= goal <= 50:
+            raise HTTPException(400, "L'objectif hebdomadaire doit être un nombre entier entre 0 et 50.")
     if body.get("automaticFollowups") is True:
         status = gmail.status()
         if not status.get("connected") or not status.get("send_authorized"):
@@ -1829,6 +1837,38 @@ def put_settings(body: dict):
     st["settings"].update({k: v for k, v in body.items() if k in S.DEFAULT_STATE["settings"]})
     S.save_state(st)
     return st["settings"]
+
+
+@app.get("/api/ai/key")
+def get_ai_key_status():
+    return ai.key_status()
+
+
+@app.post("/api/ai/key")
+async def save_ai_key(request: Request):
+    content_length = request.headers.get("content-length", "")
+    if content_length.isdigit() and int(content_length) > 4096:
+        raise HTTPException(413, "La requête est trop volumineuse.")
+    try:
+        body = await request.json()
+    except (ValueError, json.JSONDecodeError):
+        raise HTTPException(400, "Requête de clé invalide.") from None
+    key = body.get("api_key") if isinstance(body, dict) else None
+    if not isinstance(key, str) or not key.strip() or len(key) > 512 or "\n" in key or "\r" in key:
+        raise HTTPException(400, "Saisis une clé Groq valide.")
+    if not C.AI_KEY_ENCRYPTION_KEY:
+        raise HTTPException(503, "Le serveur n'a pas configuré le chiffrement des clés personnelles.")
+    try:
+        ai.save_personal_api_key(key)
+    except ai.AIError as ex:
+        raise HTTPException(400, str(ex)) from ex
+    return ai.key_status()
+
+
+@app.delete("/api/ai/key")
+def delete_ai_key():
+    ai.remove_personal_api_key()
+    return ai.key_status()
 
 
 # ---------- tableau de bord / notifications ----------
@@ -1862,6 +1902,8 @@ def dashboard():
         top = [co.to_item(r, prof, set(st["favorites"]), tracked, st["home"]) for _, r in cdf.sort_values("Score", ascending=False).head(3).iterrows()]
     recent = [i for i in tr["items"] if i["statut"] not in C.STATUTS_NON_ENVOYES][-5:][::-1]
     return {
+        "weekly_goal": int(st["settings"].get("weeklyGoal", 0)),
+        "weekly_progress": application_stats.weekly_sent_count(d, date.today()),
         "kpis": {"suivies": int(len(d)), "envoyees": sent,
                  "entretiens": int(d.Statut.isin(["Entretien programmé", "Acceptée"]).sum()) if len(d) else 0,
                  "reponses": int(d.Statut.isin(["En cours de traitement", "Entretien programmé", "Acceptée", "Refusée"]).sum()) if len(d) else 0,
