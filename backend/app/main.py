@@ -188,19 +188,16 @@ class LoginIn(BaseModel):
 class RegisterIn(LoginIn):
     full_name: str = Field(min_length=1, max_length=120)
     password: str = Field(min_length=10, max_length=256)
-    registration_key: str = Field(default="", max_length=256)
 
 
 @app.get("/api/auth/status")
 def auth_status(request: Request):
     user = accounts.resolve_session(request.cookies.get(C.SESSION_COOKIE_NAME, ""))
-    registration_key_required = bool(C.REGISTRATION_KEY) and accounts.user_count() > 0
     return {
         "required": True,
         "authenticated": bool(user),
         "user": user,
         "registration_open": True,
-        "registration_key_required": registration_key_required,
         "google_login": google_login.configured(),
     }
 
@@ -232,7 +229,7 @@ def _google_login_finish(code: str, error: str) -> Response:
     try:
         email, name = google_login.identity(code)
         _, token = accounts.login_with_google(email, name)
-    except (PermissionError, ValueError, gmail.GmailError) as ex:
+    except (ValueError, gmail.GmailError) as ex:
         return fail(str(ex))
     response = RedirectResponse("/tableau-de-bord", status_code=303)
     _set_session_cookie(response, token)
@@ -257,11 +254,7 @@ def login(body: LoginIn, request: Request):
 def register(body: RegisterIn, request: Request):
     client = _check_auth_rate_limit(request)
     try:
-        user, token = accounts.create_user(
-            body.email, body.password, body.registration_key, body.full_name,
-        )
-    except PermissionError as ex:
-        raise HTTPException(403, str(ex)) from ex
+        user, token = accounts.create_user(body.email, body.password, body.full_name)
     except ValueError as ex:
         raise HTTPException(400, str(ex)) from ex
     with _LOGIN_LOCK:

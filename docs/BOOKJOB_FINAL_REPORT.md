@@ -78,7 +78,7 @@ présent dans ce fichier. Le fichier n'a jamais été commité et reste ignoré 
 | Fichier | Contenu | Résultat |
 |---|---|---|
 | `tests/test_pipeline.py` | règles unitaires, nettoyage complet sur données synthétiques, isolation des échecs, connecteur Places simulé, export et historique, fichier brut réel | **non exécuté** |
-| `tests/test_google_login.py` | création de compte, liaison à un compte existant, `state` falsifié, code refusé, clé d'invitation, absence de configuration | **non exécuté** |
+| `tests/test_google_login.py` | création de compte sans clé d'inscription, liaison à un compte existant, `state` falsifié, code refusé, absence de configuration | **non exécuté** |
 | `tests/test_api.py` (3 ajouts) | santé publique, qualité des données, validation du profil | **non exécuté** |
 | Build frontend (`npm run build`) | — | **non exécuté** |
 

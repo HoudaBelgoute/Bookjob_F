@@ -1,7 +1,9 @@
+from contextlib import contextmanager
+
 import pytest
 from fastapi.testclient import TestClient
 
-from app import accounts, config as C, db, main
+from app import accounts, db, main
 
 
 def test_pool_opens_without_waiting_and_is_reused(monkeypatch):
@@ -38,12 +40,12 @@ def test_pool_opens_without_waiting_and_is_reused(monkeypatch):
     assert pool.options["kwargs"]["connect_timeout"] == 5
 
 
-def test_anonymous_auth_status_skips_unneeded_user_count(monkeypatch):
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
+def test_anonymous_auth_status_allows_registration_without_counting_users(monkeypatch):
+    monkeypatch.setenv("BOOKJOB_REGISTRATION_KEY", "legacy-value-is-ignored")
     monkeypatch.setattr(accounts, "resolve_session", lambda token: None)
 
     def unexpected_user_count():
-        pytest.fail("user_count should not run when no registration key is configured")
+        pytest.fail("Public auth status must not query user count.")
 
     monkeypatch.setattr(accounts, "user_count", unexpected_user_count)
 
@@ -55,30 +57,67 @@ def test_anonymous_auth_status_skips_unneeded_user_count(monkeypatch):
         "authenticated": False,
         "user": None,
         "registration_open": True,
-        "registration_key_required": False,
         "google_login": main.google_login.configured(),
     }
 
 
-def test_auth_status_checks_user_count_when_registration_key_is_enabled(monkeypatch):
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "invite-required")
+def test_registration_route_works_without_legacy_invitation_key(monkeypatch):
+    monkeypatch.setenv("BOOKJOB_REGISTRATION_KEY", "legacy-value-is-ignored")
     monkeypatch.setattr(accounts, "resolve_session", lambda token: None)
-    monkeypatch.setattr(accounts, "user_count", lambda: 1)
+    monkeypatch.setattr(main, "_check_auth_rate_limit", lambda request: "test-client")
+    created = {}
 
-    response = TestClient(main.app).get("/api/auth/status")
+    def create_user(email, password, full_name):
+        created.update(email=email, password=password, full_name=full_name)
+        return ({"id": "public-user", "email": email, "full_name": full_name}, "session-token")
 
-    assert response.status_code == 200
-    assert response.json()["registration_key_required"] is True
+    monkeypatch.setattr(accounts, "create_user", create_user)
+    response = TestClient(main.app).post("/api/auth/register", json={
+        "full_name": "Public Candidate",
+        "email": "public@example.com",
+        "password": "a-long-test-password",
+    })
+
+    assert response.status_code == 201
+    assert response.json()["user"]["id"] == "public-user"
+    assert created == {
+        "email": "public@example.com",
+        "password": "a-long-test-password",
+        "full_name": "Public Candidate",
+    }
+
+
+def test_google_account_creation_ignores_legacy_invitation_key(monkeypatch):
+    monkeypatch.setenv("BOOKJOB_REGISTRATION_KEY", "legacy-value-is-ignored")
+
+    class Connection:
+        @staticmethod
+        def execute(query, params):
+            return type("Result", (), {"fetchone": lambda self: None})()
+
+    @contextmanager
+    def connection():
+        yield Connection()
+
+    monkeypatch.setattr(accounts, "_connect", connection)
+    calls = []
+
+    def create_user(email, password, full_name):
+        calls.append((email, full_name))
+        return ({"id": "google-user"}, "session-token")
+
+    monkeypatch.setattr(accounts, "create_user", create_user)
+    user, token = accounts.login_with_google("candidate@example.com", "Google Candidate")
+
+    assert user["id"] == "google-user" and token == "session-token"
+    assert calls == [("candidate@example.com", "Google Candidate")]
 
 
 def test_auth_status_does_not_hide_database_errors(monkeypatch):
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "invite-required")
-    monkeypatch.setattr(accounts, "resolve_session", lambda token: None)
-
-    def database_failure():
+    def database_failure(token):
         raise RuntimeError("database unavailable")
 
-    monkeypatch.setattr(accounts, "user_count", database_failure)
+    monkeypatch.setattr(accounts, "resolve_session", database_failure)
 
     with pytest.raises(RuntimeError, match="database unavailable"):
         TestClient(main.app).get("/api/auth/status")

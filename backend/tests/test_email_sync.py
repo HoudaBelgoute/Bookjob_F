@@ -21,7 +21,6 @@ def _application(tracking_id="EXT-TEST", status="Candidature envoyée", date_sen
 
 def _setup_sync(monkeypatch, tmp_path, tracking):
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
     user, _token = accounts.create_user(
         "sync@example.com", "correct-horse-password", full_name="Sync Candidate",

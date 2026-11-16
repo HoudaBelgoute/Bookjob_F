@@ -26,7 +26,6 @@ ALLOWED_CV_EXT = {"pdf"}
 BOOKJOB_ENV = os.getenv("BOOKJOB_ENV", "development").lower()
 SESSION_COOKIE_NAME = "bookjob_session"
 SESSION_MAX_AGE = 8 * 60 * 60
-REGISTRATION_KEY = os.getenv("BOOKJOB_REGISTRATION_KEY", "")
 _CURRENT_USER_ID: ContextVar[str | None] = ContextVar("bookjob_user_id", default=None)
 
 

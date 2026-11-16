@@ -35,7 +35,6 @@ def _component_content(component, component_id):
 
 def _authenticated_client(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     accounts.initialize()
     client = TestClient(app)
     response = client.post("/api/auth/register", json={

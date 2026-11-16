@@ -112,7 +112,6 @@ export default function AuthGate({ children }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
-  const [registrationKey, setRegistrationKey] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [googleError, setGoogleError] = useState('')
@@ -238,7 +237,7 @@ export default function AuthGate({ children }) {
       let result
       if (registering) {
         if (password !== confirmation) throw new Error('Les deux mots de passe ne correspondent pas.')
-        result = await api.register(fullName, email, password, registrationKey)
+        result = await api.register(fullName, email, password)
       } else {
         result = await api.login(email, password)
       }
@@ -247,7 +246,6 @@ export default function AuthGate({ children }) {
         authenticated: true,
         user: result.user,
         registration_open: true,
-        registration_key_required: status?.registration_key_required || false,
       })
       publishAuthChange(authChannelRef.current)
       setPassword('')
@@ -407,19 +405,6 @@ export default function AuthGate({ children }) {
                     placeholder="Confirmez votre mot de passe"
                   />
                 </label>
-                {status.registration_key_required && (
-                  <label className="auth-field">
-                    Clé d’invitation
-                    <input
-                      required
-                      type="password"
-                      autoComplete="off"
-                      value={registrationKey}
-                      onChange={(event) => setRegistrationKey(event.target.value)}
-                      placeholder="Votre clé d’invitation"
-                    />
-                  </label>
-                )}
               </>
             )}
             {error && <p role="alert" className="auth-feedback">{error}</p>}

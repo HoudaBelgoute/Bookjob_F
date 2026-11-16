@@ -9,7 +9,6 @@ from app import accounts, config as C, main
 @pytest.fixture
 def google(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "DATA_DIR", tmp_path / "legacy-data")
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "")
     monkeypatch.setattr(C, "BOOKJOB_ENV", "development")
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_ID", "client-id")
     monkeypatch.setattr(C, "GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
@@ -74,18 +73,18 @@ def test_google_login_rejects_bad_state_and_bad_code(google):
     assert client.get("/api/auth/status").json()["authenticated"] is False
 
 
-def test_google_login_respects_invitation_key(google, monkeypatch):
+def test_google_login_does_not_require_registration_key(google, monkeypatch):
     TestClient(main.app).post("/api/auth/register", json={
         "full_name": "Premier", "email": "premier@example.com", "password": "a-long-test-password",
     })
-    monkeypatch.setattr(C, "REGISTRATION_KEY", "secret-invite")
+    monkeypatch.setenv("BOOKJOB_REGISTRATION_KEY", "legacy-value-is-ignored")
 
     client = TestClient(main.app, follow_redirects=False)
     state = _start(client)
-    refused = client.get("/api/google/callback", params={"code": "good-code", "state": state})
+    result = client.get("/api/google/callback", params={"code": "good-code", "state": state})
 
-    assert "erreur_google" in refused.headers["location"]
-    assert client.get("/api/auth/status").json()["authenticated"] is False
+    assert result.status_code == 303 and result.headers["location"] == "/tableau-de-bord"
+    assert client.get("/api/auth/status").json()["authenticated"] is True
 
 
 def test_google_login_unavailable_without_configuration(google, monkeypatch):

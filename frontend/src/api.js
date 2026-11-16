@@ -42,9 +42,9 @@ const qs = (params) => {
 export const api = {
   authStatus: (signal) => req('/auth/status', { signal }),
   login: (email, password) => req('/auth/login', { method: 'POST', body: { email, password } }),
-  register: (full_name, email, password, registration_key) => req('/auth/register', {
+  register: (full_name, email, password) => req('/auth/register', {
     method: 'POST',
-    body: { full_name, email, password, registration_key },
+    body: { full_name, email, password },
   }),
   logout: () => req('/auth/logout', { method: 'POST' }),
   googleStatus: () => req('/google/status'),
